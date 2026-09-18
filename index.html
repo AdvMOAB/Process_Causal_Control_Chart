@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>공정 인과 관리도</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -10,6 +10,10 @@
 <style>html,body{margin:0;padding:0;}</style>
 </head>
 <body>
+
+
+
+
 <style>
   :root{
     color-scheme: light;
@@ -474,7 +478,7 @@
     <div class="chart-top">
       <div class="alert-row" id="alertRow"></div>
       <div class="hover-info" id="hoverInfo">
-        <span class="hi-seg"><span class="hi-label">값</span><span class="hi-value empty" id="hiValue">—</span></span>
+        <span class="hi-seg"><span class="hi-label">현재 채널 σ 이탈</span><span class="hi-value empty" id="hiValue">—</span></span>
         <span class="hi-sep"></span>
         <span class="hi-seg"><span class="hi-label">시간</span><span class="hi-value empty" id="hiTime">—</span></span>
       </div>
@@ -487,7 +491,7 @@
     <div class="stats-bar">
       <div class="stat"><span class="k">경과 틱</span><span class="v" id="statTicks">0</span></div>
       <div class="stat"><span class="k">전체 규칙 위반</span><span class="v" id="statViol">0</span></div>
-      <div class="stat"><span class="k">현재 채널 σ 이탈</span><span class="v" id="statSigma">0.00σ</span></div>
+      <div class="stat"><span class="k">평균 σ 이탈</span><span class="v" id="statSigma">0.00σ</span></div>
       <div class="stat"><span class="k">시간당 Cpk</span><span class="v" id="statCpk">—</span></div>
     </div>
   </div>
@@ -880,10 +884,17 @@
     s.chunkHistory.push(chunkVal);
     if (s.chunkHistory.length > MAX_CHUNK) s.chunkHistory.shift();
 
-    if (def.usl !== undefined){
-      var cpk = computeCpk(recent, def.usl, def.lsl);
-      if (cpk !== null) s.cpk = cpk;
-    }
+    // 내폭/외폭(chi/oe)은 실제 설계 규격(usl/lsl)이 있지만, 원인계열
+    // 채널(솔트컨베이어/솔트조 온도, 벨트속도)은 설계 규격이 없어 예전엔
+    // Cpk가 항상 "규격 없음"으로 고정 표시됐다. 화면엔 이미 모든 채널에
+    // UCL/LCL(=CL±3σ) 관리한계선이 그려지고 있으므로, 설계 규격이 없는
+    // 채널은 그 관리한계선을 규격 대용으로 써서 Cpk가 다른 채널처럼
+    // 계속 변동하는 실제 수치로 보이게 한다(설계 규격 대비 공정능력이
+    // 아니라 관리한계 대비 공정능력이라는 점에 유의).
+    var cpkUsl = def.usl !== undefined ? def.usl : def.mu + 3 * def.rawSigma;
+    var cpkLsl = def.lsl !== undefined ? def.lsl : def.mu - 3 * def.rawSigma;
+    var cpk = computeCpk(recent, cpkUsl, cpkLsl);
+    if (cpk !== null) s.cpk = cpk;
 
     var trig = ruleCheck(s.chunkHistory, def.chunkSigma, def.mu);
     trig.forEach(function(r){
@@ -1124,7 +1135,10 @@
       // hovering only fills it in, it never moves and never covers the chart.
       var stepTicks = mode === "raw" ? 1 : CHUNK_SIZE;
       var tickAtIdx = Math.max(0, state.tick - (n - 1 - hIdx) * stepTicks);
-      var valueText = hVal.toFixed(dp) + (def.unit ? " " + def.unit : "");
+      // 값 대신 이 지점의 σ 이탈(관리한계 대비 편차)을 보여준다 - 아래 통계
+      // 카드가 "평균 σ 이탈"로 바뀌면서, 이 실시간/호버 카드가 "현재 채널
+      // σ 이탈"(한 지점 기준 순간값) 역할을 이어받는다.
+      var valueText = (Math.abs(hVal - cl) / sigma).toFixed(2) + "σ";
       var timeText = fmtTime(tickAtIdx) + "s 경과";
       // Look up the alarm color recorded for THIS instance when it arrived -
       // not whatever the channel is blinking right now - so an old Rule1
@@ -1139,7 +1153,7 @@
       // shows a specific historical point while the pointer is over it.
       var liveVal = data[data.length - 1];
       var liveOut = Math.abs(liveVal - cl) > 3 * sigma;
-      var liveValueText = liveVal.toFixed(dp) + (def.unit ? " " + def.unit : "");
+      var liveValueText = (Math.abs(liveVal - cl) / sigma).toFixed(2) + "σ";
       var liveTimeText = fmtTime(state.tick) + "s 경과";
       var liveColorHist = mode === "raw" ? s.rawWorstColor : s.chunkWorstColor;
       var liveAlarmColor = liveColorHist[liveColorHist.length - 1] || null;
@@ -1268,20 +1282,23 @@
       "<span id=\"modeLabel\">" + (state.mode === "raw" ? "초단위" : "시간당 청크") + "</span>";
     document.getElementById("statTicks").textContent = state.tick;
     document.getElementById("statViol").textContent = state.violCount;
-    document.getElementById("statSigma").textContent = (Math.abs(last - def.mu) / sigma).toFixed(2) + "σ";
+    // "현재 채널 σ 이탈"(순간값)은 위 hover-info 카드로 옮겼고, 이 통계
+    // 카드는 화면에 보이는 구간 전체(raw 160개 / 청크 60개 창)에 대한
+    // "평균 σ 이탈"을 보여준다.
+    var sigSum = 0;
+    for (var sigIdx = 0; sigIdx < data.length; sigIdx++){
+      sigSum += Math.abs(data[sigIdx] - def.mu) / sigma;
+    }
+    var sigAvg = data.length ? sigSum / data.length : 0;
+    document.getElementById("statSigma").textContent = sigAvg.toFixed(2) + "σ";
 
     var cpkEl = document.getElementById("statCpk");
-    if (def.usl !== undefined){
-      if (s.cpk === null || s.cpk === undefined){
-        cpkEl.textContent = "측정 중…";
-        cpkEl.style.color = "";
-      } else {
-        cpkEl.textContent = s.cpk.toFixed(3);
-        cpkEl.style.color = s.cpk >= 1.33 ? "var(--ok)" : (s.cpk >= 1.0 ? RULE_COLOR.Rule2.hex : RULE_COLOR.Rule5.hex);
-      }
-    } else {
-      cpkEl.textContent = "규격 없음";
+    if (s.cpk === null || s.cpk === undefined){
+      cpkEl.textContent = "측정 중…";
       cpkEl.style.color = "";
+    } else {
+      cpkEl.textContent = s.cpk.toFixed(3);
+      cpkEl.style.color = s.cpk >= 1.33 ? "var(--ok)" : (s.cpk >= 1.0 ? RULE_COLOR.Rule2.hex : RULE_COLOR.Rule5.hex);
     }
 
     var allTrig = visibleTrigFor(id);
