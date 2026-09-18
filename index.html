@@ -1,0 +1,1632 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>공정 인과 관리도</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>html,body{margin:0;padding:0;}</style>
+</head>
+<body>
+<style>
+  :root{
+    color-scheme: light;
+    --bg:#F2F4FA;
+    --surface:#FFFFFF;
+    --surface-2:#EAEFF9;
+    --ink:#1B2140;
+    --ink-muted:#5B6178;
+    --line:#DCE3F2;
+    --grid:#E6EBF6;
+    --accent:#2F5D9E;
+    --accent-ink:#FFFFFF;
+    --ok:#1F8A5F;
+    --ok-bg:#E5F5EC;
+    --crit:#D8432B;
+    --crit-rgb:216,67,43;
+    --crit-bg:#FBEAE6;
+    --trace:#2F6FA6;
+    --trace2:#8C4FBF;
+    --sans:'IBM Plex Sans', system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono:'IBM Plex Mono', ui-monospace, "SFMono-Regular", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#10142A;
+      --surface:#171C36;
+      --surface-2:#1E2542;
+      --ink:#EAEEFC;
+      --ink-muted:#96A0C4;
+      --line:#2A3258;
+      --grid:#242C50;
+      --accent:#7FAAEE;
+      --accent-ink:#0E1226;
+      --ok:#49D69A;
+      --ok-bg:#123528;
+      --crit:#FF7A5F;
+      --crit-rgb:255,122,95;
+      --crit-bg:#3A1D1B;
+      --trace:#7FAAEE;
+      --trace2:#C9A6F2;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#10142A;
+    --surface:#171C36;
+    --surface-2:#1E2542;
+    --ink:#EAEEFC;
+    --ink-muted:#96A0C4;
+    --line:#2A3258;
+    --grid:#242C50;
+    --accent:#7FAAEE;
+    --accent-ink:#0E1226;
+    --ok:#49D69A;
+    --ok-bg:#123528;
+    --crit:#FF7A5F;
+    --crit-rgb:255,122,95;
+    --crit-bg:#3A1D1B;
+    --trace:#7FAAEE;
+    --trace2:#C9A6F2;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{ animation:none !important; transition:none !important; }
+  }
+  *{ box-sizing:border-box; }
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    padding-inline:16px;
+    padding-block:28px;
+    --log-panel-w:540px;
+  }
+  .wrap{
+    max-width:1040px; margin-inline:auto; display:flex; flex-direction:column; gap:16px;
+    transition:filter .32s ease;
+  }
+  body.log-open .wrap, body.ocap-open .wrap, body.edit-open .wrap{ filter:blur(6px); }
+
+  .hdr{ display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:14px; }
+  .hdr h1{ font-size:22px; font-weight:700; margin:0 0 4px; letter-spacing:-0.01em; }
+  .hdr p{ margin:0; color:var(--ink-muted); font-size:13.5px; max-width:56ch; line-height:1.5; }
+  .hdr-actions{ display:flex; align-items:center; gap:10px; }
+
+  .pill{
+    display:inline-flex; align-items:center; gap:7px;
+    padding:7px 14px; border-radius:999px; font-size:13px; font-weight:600;
+    background:var(--ok-bg); color:var(--ok); white-space:nowrap;
+  }
+  .pill.crit{ background:var(--crit-bg); color:var(--crit); }
+  .pill .dot{ width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .pill.crit .dot{ animation: blink 1s ease-in-out infinite; }
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:18px 18px 14px;
+  }
+
+  /* ---- channel tabs ---- */
+  .tabs-card{ display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:14px 16px; }
+  .tab-group{ display:flex; flex-direction:column; gap:6px; }
+  .tab-group-label{ font-size:10.5px; font-weight:600; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.06em; }
+  .tab-row{ display:flex; gap:6px; }
+  .tab-btn{
+    position:relative; display:inline-flex; align-items:center; gap:6px;
+    font-family:var(--sans); font-size:12.5px; font-weight:600; cursor:pointer;
+    padding:8px 13px; border-radius:10px; border:1px solid var(--line);
+    background:var(--surface-2); color:var(--ink-muted);
+  }
+  .tab-btn.active{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .tab-arrow{ color:var(--ink-muted); font-size:14px; padding-top:14px; }
+  .tab-divider{ width:1px; align-self:stretch; background:var(--line); }
+  .dot-badge{
+    position:absolute; top:-4px; right:-4px; width:9px; height:9px; border-radius:50%;
+    background:var(--badge-color, var(--crit)); box-shadow:0 0 0 2px var(--surface); display:none;
+  }
+  .tab-btn.alarm .dot-badge{ display:block; animation: blink .9s ease-in-out infinite; }
+
+  .controls{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+  .seg{ display:inline-flex; background:var(--surface-2); border-radius:10px; padding:3px; gap:2px; }
+  .seg button{
+    font-family:var(--sans); font-size:12.5px; font-weight:600; border:none; cursor:pointer;
+    padding:7px 12px; border-radius:8px; background:transparent; color:var(--ink-muted);
+  }
+  .seg button.active{ background:var(--accent); color:var(--accent-ink); }
+
+  .btn{
+    font-family:var(--sans); font-size:13px; font-weight:600; border-radius:9px; cursor:pointer;
+    padding:9px 14px; border:1px solid var(--line); background:var(--surface); color:var(--ink);
+  }
+  .btn:hover{ border-color:var(--accent); }
+  .btn.ghost{ background:transparent; }
+  .btn.inject{ background:var(--crit); color:#fff; border-color:var(--crit); width:100%; }
+  .btn.inject:disabled{ opacity:.55; cursor:default; }
+  .spacer{ flex:1 1 auto; }
+
+  .chart-card{ display:flex; flex-direction:column; gap:10px; transition: background-color .25s ease; }
+  .chart-card.alarm{
+    background-color: rgba(var(--alarm-rgb, var(--crit-rgb)), .16);
+    animation: alarmRing 1s ease-in-out infinite;
+  }
+  @keyframes alarmRing{
+    0%,100%{ box-shadow: 0 0 0 0 rgba(var(--alarm-rgb, var(--crit-rgb)), .5); }
+    50%{ box-shadow: 0 0 0 9px rgba(var(--alarm-rgb, var(--crit-rgb)), 0); }
+  }
+  .chart-card.alarm canvas{ background-color: rgba(var(--alarm-rgb, var(--crit-rgb)), .22); }
+  .chart-card.alarm .val{ color: var(--alarm-color, var(--crit)); }
+
+  .chart-top{ display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  /* chart-row-main: the title/readout/legend row. Plain space-between would
+     spread whatever room is left BETWEEN these three items, so a short
+     title ("내폭") vs a long one ("솔트컨베이어 존 온도") changed how much
+     space sat before the readout - the "초단위" text visibly jumped left/
+     right every time the channel tab changed. Pinning chart-title to a
+     min-width wide enough for the longest channel name (and switching to
+     flex-start + margin-left:auto on the legend) makes the readout start at
+     the exact same x for every channel; shorter titles just leave blank
+     space in their own slot instead of pulling the readout toward them. */
+  /* align-items:center (overriding .chart-top's baseline) because with a
+     26px title/readout next to an 11.5px legend, baseline alignment lines
+     up their TEXT baselines - which visually reads as the small legend text
+     sitting low, well under the vertical center of the big text next to it.
+     Centering pulls the legend up to sit level with the title/readout. */
+  .chart-row-main{ justify-content:flex-start; align-items:center; }
+  .chart-row-main .chart-title{ flex:0 0 auto; min-width:296px; }
+  .chart-row-main .legend{ margin-left:auto; }
+  .chart-title{ display:flex; align-items:center; gap:8px; font-size:26px; font-weight:600; color:var(--ink-muted); }
+  .readout{ display:flex; align-items:baseline; gap:8px; margin-left:19px; }
+  /* The value itself also varies in digit count by channel (283.85 vs
+     25.0000), which shifted "초단위" by a few px on its own even with the
+     title fixed above - min-width (with tabular-nums already keeping every
+     digit the same width) pins that too, sized to the widest formatted
+     value across all channels ("25.0000"/"30.0000"). */
+  .readout .val{ font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:26px; font-weight:600; display:inline-block; min-width:112px; }
+  .readout .unit{ font-family:var(--mono); font-size:13px; color:var(--ink-muted); }
+  /* Fixes the same kind of drift the value/title columns had: "℃", "mm" and
+     "m/s" aren't the same width, so without this the "· 초단위" text after
+     it would still creep left/right by a few px depending on which unit is
+     showing. min-width reserves room for the widest unit ("mm") so "초단위"
+     always starts at the same x no matter which channel is selected. */
+  .readout .unit-prefix{ display:inline-block; min-width:34px; }
+  .legend{ display:flex; flex-wrap:wrap; gap:12px; font-size:11.5px; color:var(--ink-muted); }
+  .legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .legend i{ width:10px; height:10px; border-radius:2px; display:inline-block; background:currentColor; }
+
+  /* alert-row: sits on its own row directly below the chart-title/readout/
+     legend row, holding one chip PER currently-active alert rule on the
+     shown channel (split, not combined - "Rule 1" / "Rule 2" / ... side by
+     side, no "발생" suffix). Each alert is added the moment its rule first
+     breaches and stays in this row - across ticks and even after the
+     underlying condition clears - until the user explicitly dismisses it
+     via the "확인" button in its own panel below. */
+  .alert-row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .alert-chip{
+    display:inline-flex; align-items:center; gap:9px;
+    font-family:var(--sans); font-size:14.5px; font-weight:600; cursor:pointer;
+    padding:11px 18px; border-radius:999px; border:1px solid transparent;
+    background: rgba(var(--chip-rgb), .16);
+    color: var(--chip-color);
+    transition: transform .15s ease, border-color .15s ease;
+  }
+  .alert-chip:hover{ border-color: currentColor; transform:translateY(-1px); }
+  .alert-chip .dot{ width:9px; height:9px; border-radius:50%; background:currentColor; flex:none; animation: blink 1s ease-in-out infinite; }
+  .alert-chip .chevron{ font-size:14px; opacity:.6; transition: transform .25s ease; }
+  .alert-chip[aria-expanded="true"] .chevron{ transform: rotate(90deg); }
+
+  /* alert-panels: one independent accordion slot per alert chip, stacked in
+     normal document flow directly below the chip row (pushes the readout/
+     canvas down as panels open). Each panel shows only its OWN rule's OCAP
+     action plan (the .ocap-rule box from buildOcapHTML), with the "확인"
+     button placed INSIDE that same box, bottom-right (via .ocap-actions),
+     so it reads as part of the run-rule-violation card, not a separate
+     control floating below it. Clicking it clears just that one alert. */
+  .alert-panels{ display:flex; flex-direction:column; }
+  .alert-panel{
+    display:grid; grid-template-rows:0fr; opacity:0;
+    transition:grid-template-rows .28s cubic-bezier(.4,0,.2,1), opacity .2s ease, margin-top .28s ease;
+  }
+  .alert-panel.open{ grid-template-rows:1fr; opacity:1; margin-top:8px; }
+  .alert-panel-inner{ overflow:hidden; min-height:0; }
+  .ocap-actions{ display:flex; justify-content:flex-end; margin-top:10px; }
+  .ack-btn{
+    border:1.5px solid var(--ack-color, var(--crit)); cursor:pointer;
+    font-family:var(--sans); font-size:12.5px; font-weight:700;
+    padding:6px 16px; border-radius:999px;
+    background: rgba(var(--ack-rgb), .14); color: var(--ack-color, var(--crit));
+    transition: background-color .15s ease, transform .15s ease;
+  }
+  .ack-btn:hover{ background: rgba(var(--ack-rgb), .26); transform:translateY(-1px); }
+
+  canvas{ width:100%; height:250px; display:block; border-radius:10px; background:var(--surface-2); cursor:crosshair; touch-action:none; }
+  .hover-info{ display:inline-flex; align-items:center; gap:12px; padding:9.5px 18px; border-radius:8px; background:var(--surface); border:1.5px solid var(--ink-muted); font-family:var(--mono); white-space:nowrap; }
+  .hover-info .hi-seg{ display:inline-flex; align-items:baseline; gap:6px; }
+  .hover-info .hi-label{ font-size:12px; color:var(--ink-muted); }
+  .hover-info .hi-value{ font-size:14.5px; font-weight:600; color:var(--ink); min-width:4.5em; display:inline-block; }
+  .hover-info .hi-value.empty{ color:var(--ink-muted); font-weight:400; }
+  .hover-info .hi-value.crit{ color:var(--crit); }
+  .hover-info .hi-sep{ width:1px; height:14px; background:var(--line); }
+
+  .grid3{ display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; }
+  @media (max-width: 860px){ .grid3{ grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px){ .grid3{ grid-template-columns: 1fr; } }
+
+  .inject-card{ display:flex; flex-direction:column; gap:9px; }
+  .inject-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; }
+  .inject-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; flex:1 1 auto; }
+
+  .stats-card{ padding:14px 14px 14px; }
+  .stats-bar{ display:grid; grid-template-columns: repeat(4, 1fr); gap:14px; }
+  @media (max-width: 720px){ .stats-bar{ grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 420px){ .stats-bar{ grid-template-columns: 1fr; } }
+  .stat{ display:flex; flex-direction:column; gap:5px; background:var(--surface-2); border-radius:10px; padding:11px 14px; }
+  .stat .k{ font-size:11.5px; color:var(--ink-muted); }
+  .stat .v{ font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:19px; font-weight:600; }
+
+  .log-card h2{ margin:0 0 8px; font-size:14px; }
+  .log-hint{ margin:-4px 0 8px; font-size:11px; color:var(--ink-muted); }
+  .log-list{ max-height:min(56vh, 560px); overflow-y:auto; display:flex; flex-direction:column-reverse; gap:6px; }
+  /* Fixed table-like columns (time / channel / rule / mode), instead of a
+     flex row: channel-name length varies a lot ("내폭" vs "솔트컨베이어 존
+     온도"), and in a flex row that shifted where the rule text started on
+     every row and wrapped some rows to two lines. A CSS grid keeps every
+     column's start position identical on every row regardless of label
+     length - the channel cell just wraps to two lines in place when its
+     text is long, without moving the rule column at all. Left-over blank
+     space in a shorter cell is expected/fine. */
+  .log-row{
+    display:grid; grid-template-columns: 40px minmax(70px, 184px) minmax(90px, 1fr) auto;
+    align-items:start; column-gap:8px; font-size:12.5px;
+    padding:7px 10px; border-radius:8px; background:var(--surface-2);
+    cursor:pointer; box-shadow: inset 0 0 0 1px transparent;
+    transition: background-color .15s ease, box-shadow .15s ease;
+  }
+  .log-row:hover, .log-row:focus-visible{ background:var(--surface); box-shadow: inset 0 0 0 1px var(--accent); outline:none; }
+  .log-row time{ font-family:var(--mono); color:var(--ink-muted); font-variant-numeric:tabular-nums; padding-top:1px; }
+  /* The channel/rule columns have a fixed max width (see grid-template-
+     columns above) so every row's rule text starts at the same x position
+     no matter how long that row's channel name is. On a wide panel they
+     comfortably fit the longest label/rule text on one line; only on a very
+     narrow panel (mobile) do they shrink toward their minmax floor, at
+     which point they ellipsize instead of visually clipping mid-character. */
+  .log-row .ch-chip{ font-weight:600; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .log-row .rule{ font-weight:600; color:var(--crit); line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .log-row .mode-badge{
+    justify-self:end; align-self:start; white-space:nowrap;
+    font-size:10.5px; font-weight:600; color:var(--ink-muted);
+    background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:2px 8px;
+  }
+  .log-empty{ font-size:12.5px; color:var(--ink-muted); padding:10px 2px; }
+
+  .log-fab{
+    position:fixed; left:20px; bottom:20px; z-index:40;
+    display:inline-flex; align-items:center; gap:7px;
+    padding:11px 18px; border-radius:999px; border:1px solid var(--line);
+    background:var(--surface); color:var(--ink);
+    font-family:var(--sans); font-size:13px; font-weight:600; cursor:pointer;
+    box-shadow:0 6px 20px rgba(0,0,0,.16);
+    transition:background-color .2s ease, border-color .2s ease, color .2s ease, transform .15s ease;
+  }
+  .log-fab:hover{ border-color:var(--accent); transform:translateY(-1px); }
+  .log-fab.open{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .log-fab-icon{ font-size:14px; line-height:1; }
+
+  /* .log-panel and .ocap-panel are siblings inside .log-dock, laid out with
+     flex so the OCAP popover appears to the RIGHT of the log panel when a
+     log row is clicked, wrapping below it if the viewport is too narrow.
+     Each panel still animates its own open/collapse independently via the
+     grid-template-rows trick, so a closed panel takes no visible space and
+     doesn't affect the dock's layout. */
+  .log-dock{
+    position:fixed; left:20px; bottom:70px; z-index:39;
+    display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap;
+    max-width:calc(100vw - 40px);
+    /* A closed panel still contributes its full WIDTH to this flex row even
+       at 0 height (only the row/height collapses via grid-template-rows),
+       so the dock's own bounding box can extend well past the one visible
+       card - e.g. into the space reserved for a closed ocap-panel. Without
+       this, clicks landing on that reserved-but-invisible strip hit the
+       dock itself and were wrongly treated as "inside", so background
+       clicks there never closed anything. pointer-events:none here lets
+       such clicks fall through to whatever is actually behind them; each
+       panel re-enables pointer-events:auto on itself while open, so the
+       visible card stays fully clickable. */
+    pointer-events:none;
+  }
+  .log-panel{
+    width:min(var(--log-panel-w), calc(100vw - 40px));
+    max-height:calc(100vh - 100px);
+    display:grid; grid-template-rows:0fr;
+    opacity:0; pointer-events:none;
+    transition:grid-template-rows .32s cubic-bezier(.4,0,.2,1), opacity .22s ease;
+  }
+  .log-panel.open{ grid-template-rows:1fr; opacity:1; pointer-events:auto; }
+  .log-panel-inner{ overflow:hidden; min-height:0; }
+  .log-panel .log-card{ margin:0; box-shadow:0 10px 30px rgba(0,0,0,.2); }
+
+  /* ---- OCAP action-plan popover (opened from a clicked log row) ---- */
+  .ocap-panel{ width:min(360px, calc(100vw - 40px)); }
+  .ocap-panel .log-card{ max-height:calc(100vh - 100px); overflow-y:auto; }
+  .ocap-panel-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+  .ocap-panel-head h2{ margin:0; font-size:14px; }
+  .ocap-close{
+    border:none; background:transparent; cursor:pointer; font-size:13px; color:var(--ink-muted);
+    padding:4px 6px; border-radius:6px; line-height:1;
+  }
+  .ocap-close:hover{ color:var(--ink); background:var(--surface-2); }
+  .ocap-ch{ font-size:11.5px; color:var(--ink-muted); margin-bottom:10px; line-height:1.5; }
+  .ocap-rule{
+    border-left:3px solid var(--ocap-color, var(--crit));
+    background:var(--surface-2); border-radius:8px;
+    padding:10px 12px; margin-bottom:8px;
+  }
+  .ocap-rule:last-child{ margin-bottom:0; }
+  .ocap-rule-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+  .ocap-rule-title{ font-size:13px; font-weight:700; color:var(--ocap-color, var(--ink)); }
+  .ocap-rule-cat{ font-size:10.5px; color:var(--ink-muted); background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:2px 8px; white-space:nowrap; }
+  .ocap-row{ display:flex; flex-direction:column; gap:1px; font-size:12px; padding:3px 0; }
+  .ocap-row .ocap-k{ font-size:10.5px; color:var(--ink-muted); }
+  .ocap-row .ocap-v{ font-weight:600; }
+  .ocap-note{ margin:8px 0 0; font-size:11.5px; color:var(--ink-muted); line-height:1.5; }
+
+  /* ---- edit modal: lets the dev team rewrite the OCAP text shown when a
+     rule alert chip is clicked, without touching code. Rule1~5 each get
+     their own editable card; Save re-renders any currently-open alert/
+     OCAP panels immediately so the change is visible right away. ---- */
+  .modal-overlay{
+    position:fixed; inset:0; z-index:60;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(10,14,30,.45); padding:20px;
+    opacity:0; pointer-events:none;
+    transition:opacity .2s ease;
+  }
+  .modal-overlay.open{ opacity:1; pointer-events:auto; }
+  .modal-card{
+    width:min(640px, 100%); max-height:calc(100vh - 40px);
+    display:flex; flex-direction:column;
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    box-shadow:0 20px 60px rgba(0,0,0,.35);
+    padding:20px 20px 16px;
+  }
+  .modal-head{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .modal-head h2{ margin:0; font-size:15.5px; }
+  .modal-hint{ margin:6px 0 14px; font-size:12px; color:var(--ink-muted); line-height:1.5; }
+  .modal-body{ overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding-right:2px; }
+  .edit-rule{
+    border-left:3px solid var(--ocap-color, var(--crit));
+    background:var(--surface-2); border-radius:8px; padding:12px 14px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .edit-rule-tag{ font-size:12.5px; font-weight:700; color:var(--ocap-color, var(--ink)); }
+  .edit-field{ display:flex; flex-direction:column; gap:3px; }
+  .edit-field span{ font-size:10.5px; color:var(--ink-muted); }
+  .edit-field input, .edit-field textarea{
+    font-family:var(--sans); font-size:12.5px; color:var(--ink);
+    background:var(--surface); border:1px solid var(--line); border-radius:6px;
+    padding:6px 9px; resize:vertical;
+  }
+  .edit-field input:focus, .edit-field textarea:focus{ outline:none; border-color:var(--accent); }
+  .modal-actions{ display:flex; align-items:center; gap:8px; margin-top:14px; }
+
+  footer{ font-size:11.5px; color:var(--ink-muted); line-height:1.6; text-align:center; padding-top:4px; }
+</style>
+
+<div class="wrap">
+
+  <div class="hdr">
+    <div>
+      <h1>공정 인과 관리도</h1>
+    </div>
+    <div class="hdr-actions">
+      <button id="editOcapBtn" class="btn ghost" type="button" title="표출되는 내용 수정">✏️ 수정</button>
+      <div id="statusPill" class="pill"><span class="dot"></span><span id="statusText">정상</span></div>
+    </div>
+  </div>
+
+  <div class="card tabs-card">
+    <div class="tab-group">
+      <span class="tab-group-label">내폭 계열 (원인→결과)</span>
+      <div class="tab-row">
+        <button class="tab-btn active" type="button" data-ch="conveyor">🌡️ 솔트컨베이어 존 온도<span class="dot-badge"></span></button>
+        <button class="tab-btn" type="button" data-ch="chi">📏 내폭<span class="dot-badge"></span></button>
+      </div>
+    </div>
+    <div class="tab-divider"></div>
+    <div class="tab-group">
+      <span class="tab-group-label">외폭 계열 (원인→결과)</span>
+      <div class="tab-row">
+        <button class="tab-btn" type="button" data-ch="salt">🌡️ 솔트조 온도<span class="dot-badge"></span></button>
+        <button class="tab-btn" type="button" data-ch="oe">📐 외폭<span class="dot-badge"></span></button>
+      </div>
+    </div>
+    <div class="tab-divider"></div>
+    <div class="tab-group">
+      <span class="tab-group-label">독립 모니터링 (배경 공정변수 · 인과관계 없음)</span>
+      <div class="tab-row">
+        <button class="tab-btn" type="button" data-ch="belt">〰️ 건조로 메시벨트속도<span class="dot-badge"></span></button>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="seg" role="group" aria-label="측정 단위">
+      <button id="modeRawBtn" class="active" type="button">초단위 원자료</button>
+      <button id="modeChunkBtn" type="button">시간당 청크(평균)</button>
+    </div>
+    <button id="playBtn" class="btn ghost" type="button">일시정지</button>
+    <button id="resetBtn" class="btn ghost" type="button">초기화</button>
+  </div>
+
+  <div class="card chart-card" id="chartCard">
+    <div class="chart-top chart-row-main">
+      <div class="chart-title"><span id="chTitleIcon">🌡️</span><span id="chTitleLabel">솔트컨베이어 존 온도</span></div>
+      <div class="readout">
+        <span class="val" id="currentVal">283.85</span>
+        <span class="unit" id="currentUnit"><span class="unit-prefix">℃</span> · <span id="modeLabel">초단위</span></span>
+      </div>
+      <div class="legend">
+        <span><i style="color:var(--trace)"></i> 실측 추이</span>
+        <span><i style="color:var(--ink-muted)"></i> CL = 평균값</span>
+        <span><i class="dash" style="color:var(--ink-muted)"></i> ±1σ / ±2σ</span>
+        <span><i style="color:var(--crit)"></i> UCL/LCL = CL±3σ</span>
+      </div>
+    </div>
+    <div class="chart-top">
+      <div class="alert-row" id="alertRow"></div>
+      <div class="hover-info" id="hoverInfo">
+        <span class="hi-seg"><span class="hi-label">값</span><span class="hi-value empty" id="hiValue">—</span></span>
+        <span class="hi-sep"></span>
+        <span class="hi-seg"><span class="hi-label">시간</span><span class="hi-value empty" id="hiTime">—</span></span>
+      </div>
+    </div>
+    <div class="alert-panels" id="alertPanels"></div>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="card stats-card">
+    <div class="stats-bar">
+      <div class="stat"><span class="k">경과 틱</span><span class="v" id="statTicks">0</span></div>
+      <div class="stat"><span class="k">전체 규칙 위반</span><span class="v" id="statViol">0</span></div>
+      <div class="stat"><span class="k">현재 채널 σ 이탈</span><span class="v" id="statSigma">0.00σ</span></div>
+      <div class="stat"><span class="k">시간당 Cpk</span><span class="v" id="statCpk">—</span></div>
+    </div>
+  </div>
+
+  <div class="grid3">
+    <div class="card inject-card">
+      <h2>🌡️ → 📏 솔트컨베이어 열화 주입</h2>
+      <p>솔트컨베이어 존 온도 평균을 서서히 이동시켜 내폭에 그대로 전파되는 모습을 봅니다 (β=0.00026829mm/℃, R²=0.35).</p>
+      <button id="injectChiBtn" class="btn inject" type="button">솔트컨베이어 열화 주입 시작</button>
+    </div>
+
+    <div class="card inject-card">
+      <h2>🌡️ → 📐 솔트조 열화 주입</h2>
+      <p>솔트조 온도 평균을 서서히 이동시켜 외폭에 전파되는 모습을 봅니다 (β=0.00192224mm/℃, R²=0.15).</p>
+      <button id="injectSaltBtn" class="btn inject" type="button">솔트조 열화 주입 시작</button>
+    </div>
+
+    <div class="card inject-card">
+      <h2>〰️ 벨트속도 열화 주입</h2>
+      <p>건조로 메시벨트속도 자체에만 이상을 주입합니다 — 내폭·외폭과는 실측으로도 무관(r≈-0.0016)하여 다른 채널에 전파되지 않습니다.</p>
+      <button id="injectBeltBtn" class="btn inject" type="button">벨트속도 열화 주입 시작</button>
+    </div>
+  </div>
+
+  <footer>
+    합성 데이터로 생성되는 시연용 데모입니다 · 5채널 파라미터는 1개월 시뮬레이션 데이터(v2, 2,592,000행) 실측 파일에서 직접 재계산한 값입니다(건조로 메시벨트속도 μ=1.197842·σ=0.014846 포함) · 실제 "솔트컨베이어 속도"(이슈8)는 태그 자체가 미수집이라 데이터가 없어, 실측 데이터가 있는 유일한 컨베이어/벨트 속도 변수인 건조로 메시벨트속도(이슈14)로 대체했습니다 · 규칙 1~4는 4.1 관리도선정 8단계 판정 규칙과 동일하며, 규칙 5(15점 밀집 ±1σ)는 기준서 정의를 이번 데모에 추가 구현했습니다 · Cpk는 표11 USL/LSL(내폭 24.987~25.013mm, 외폭 29.987~30.013mm) 기준, 매 시간당 청크(15틱) 구간의 개별값으로 산출한 근사치입니다 · 모든 채널의 CL/UCL/LCL은 2026-09-18 확정된 관리한계선 산정 기준(CL=평균값, UCL/LCL=CL±3×표준편차, 적용 전 왜도·첨도로 정규성 확인)을 적용했으며, 값은 「4.1_관리도선정_MVP_작업내역 1차.md」 10장의 잠정 CL/UCL/LCL 표와 동일합니다
+  </footer>
+
+</div>
+
+<button id="logToggleBtn" class="log-fab" type="button" aria-expanded="false" aria-controls="logPanel">
+  <span class="log-fab-icon">📋</span> 로그
+</button>
+
+<div class="log-dock" id="logDock">
+  <div class="log-panel" id="logPanel">
+    <div class="log-panel-inner">
+      <div class="card log-card">
+        <h2>판정 로그</h2>
+        <p class="log-hint">항목을 클릭하면 오른쪽에 조치방안(OCAP)이 표시됩니다.</p>
+        <div class="log-list" id="logList">
+          <div class="log-empty">아직 감지된 이상이 없습니다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="log-panel ocap-panel" id="ocapPanel">
+    <div class="log-panel-inner">
+      <div class="card log-card">
+        <div class="ocap-panel-head">
+          <h2>⚠️ 조치방안 (OCAP)</h2>
+          <button id="ocapCloseBtn" class="ocap-close" type="button" aria-label="닫기">✕</button>
+        </div>
+        <div id="ocapBody"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editModalOverlay">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+    <div class="modal-head">
+      <h2 id="editModalTitle">✏️ 표출되는 내용 수정</h2>
+      <button id="editModalCloseBtn" class="ocap-close" type="button" aria-label="닫기">✕</button>
+    </div>
+    <p class="modal-hint">룰 경고를 클릭했을 때 표시되는 조치방안(OCAP) 문구를 직접 수정합니다. 저장하면 화면에 바로 반영됩니다.</p>
+    <div class="modal-body" id="editModalBody"></div>
+    <div class="modal-actions">
+      <button id="editResetBtn" class="btn ghost" type="button">기본값으로 초기화</button>
+      <div class="spacer"></div>
+      <button id="editCancelBtn" class="btn ghost" type="button">취소</button>
+      <button id="editSaveBtn" class="btn" type="button" style="background:var(--accent);color:var(--accent-ink);border-color:var(--accent);">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- 검증된 v2 인과식 파라미터 (1개월 시뮬레이션 데이터 실측 검증값 재사용) ----------
+  var CHUNK_SIZE = 15;
+  var MAX_RAW = 160, MAX_CHUNK = 60;
+  var TICK_MS = 1000;
+  var INJECT_TICKS = 55, INJECT_RAMP = 22, INJECT_NOISE_MULT = 2.6;
+
+  var CHANNEL_DEFS = {
+    conveyor: { label:"솔트컨베이어 존 온도", icon:"🌡️", unit:"℃", decimals:2, role:"cause", mu:283.8462, sigma:7.1312, pair:"chi" },
+    chi:      { label:"내폭", icon:"📏", unit:"mm", decimals:4, role:"effect", mu:25.000, beta:0.00026829, noiseSigma:0.002606, causeId:"conveyor", pair:"chi", usl:25.013, lsl:24.987 },
+    salt:     { label:"솔트조 온도", icon:"🌡️", unit:"℃", decimals:2, role:"cause", mu:331.8082, sigma:0.5921, pair:"oe" },
+    oe:       { label:"외폭", icon:"📐", unit:"mm", decimals:4, role:"effect", mu:30.000, beta:0.00192224, noiseSigma:0.0027097, causeId:"salt", pair:"oe", usl:30.013, lsl:29.987 },
+    belt:     { label:"건조로 메시벨트속도", icon:"〰️", unit:"m/s", decimals:4, role:"cause", mu:1.197842, sigma:0.014846, pair:"belt" }
+  };
+  var CHANNEL_IDS = ["conveyor", "chi", "salt", "oe", "belt"];
+  var INJECT_BTN_ID = { chi: "injectChiBtn", oe: "injectSaltBtn", belt: "injectBeltBtn" };
+  function injectLabel(pairId){
+    if (pairId === "chi") return "솔트컨베이어 열화 주입 시작";
+    if (pairId === "oe") return "솔트조 열화 주입 시작";
+    return "벨트속도 열화 주입 시작";
+  }
+
+  CHANNEL_IDS.forEach(function(id){
+    var c = CHANNEL_DEFS[id];
+    if (c.role === "cause") c.rawSigma = c.sigma;
+  });
+  CHANNEL_IDS.forEach(function(id){
+    var c = CHANNEL_DEFS[id];
+    if (c.role === "effect"){
+      var causeSigma = CHANNEL_DEFS[c.causeId].sigma;
+      c.rawSigma = Math.sqrt(Math.pow(c.beta * causeSigma, 2) + Math.pow(c.noiseSigma, 2));
+    }
+    c.chunkSigma = c.rawSigma / Math.sqrt(CHUNK_SIZE);
+  });
+
+  // ---------- state ----------
+  var state = {
+    mode: "raw",
+    running: true,
+    activeCh: "conveyor",
+    tick: 0,
+    violCount: 0,
+    log: []
+  };
+
+  var inject = {
+    chi:  { active: false, t: 0 },
+    oe:   { active: false, t: 0 },
+    belt: { active: false, t: 0 }
+  };
+
+  var chState = {};
+  CHANNEL_IDS.forEach(function(id){
+    chState[id] = { rawHistory: [], chunkHistory: [], rawPrevTrig: [], chunkPrevTrig: [], rawWorstColor: [], chunkWorstColor: [], alarm: false, cpk: null, alerts: {}, alertOpen: {}, pendingBatch: {}, reportedBatch: {} };
+  });
+
+  // Report cadence per 기준서 표18: Rule1·Rule5 = 즉시 알람 (shown the instant
+  // they trigger), Rule2~4 = 정기 보고 (batched and only surfaced once per
+  // "hour" — reusing the existing 시간당 청크 15틱 boundary as that hour, since
+  // this demo already treats one 15-tick chunk as a compressed hour
+  // elsewhere, e.g. Cpk/청크 평균). The 판정 로그 still records the exact tick
+  // a batched rule actually fired, for audit purposes — only the live status
+  // pill / chart-card blink / tab badge / alert chip are delayed.
+  var RULE_BATCHED = { Rule1: false, Rule2: true, Rule3: true, Rule4: true, Rule5: false };
+
+  var RULE_ORDER = ["Rule1", "Rule2", "Rule3", "Rule4", "Rule5"];
+  var RULE_COLOR = {
+    Rule1: { hex: "#F2E28A", rgb: "242,226,138" },
+    Rule2: { hex: "#EEB84D", rgb: "238,184,77" },
+    Rule3: { hex: "#E38A3F", rgb: "227,138,63" },
+    Rule4: { hex: "#D2593B", rgb: "210,89,59" },
+    Rule5: { hex: "#8A1F1F", rgb: "138,31,31" }
+  };
+  function worstRule(list){
+    var idx = -1, worst = null;
+    (list || []).forEach(function(r){
+      var i = RULE_ORDER.indexOf(r);
+      if (i > idx){ idx = i; worst = r; }
+    });
+    return worst;
+  }
+
+  // The set of rules that should currently be shown on every LIVE surface
+  // (alert chip row, status pill, chart-card blink, tab badge) for a
+  // channel. Immediate rules (Rule1/Rule5) reflect the raw/chunk detection
+  // state as-is; batched rules (Rule2~4) only appear here once they've been
+  // released into reportedBatch at a report boundary (see tick()), and stay
+  // visible for that one boundary period even if the underlying condition
+  // has since cleared - matching a periodic report staying up until the
+  // next one replaces it.
+  function visibleTrigFor(id){
+    var s = chState[id];
+    var immediate = s.rawPrevTrig.concat(s.chunkPrevTrig).filter(function(r){ return !RULE_BATCHED[r]; });
+    var reported = Object.keys(s.reportedBatch || {});
+    return immediate.concat(reported).filter(function(v, i, a){ return a.indexOf(v) === i; });
+  }
+  function computeCpk(values, usl, lsl){
+    var n = values.length;
+    if (n < 2) return null;
+    var mean = values.reduce(function(a, b){ return a + b; }, 0) / n;
+    var variance = values.reduce(function(a, b){ return a + Math.pow(b - mean, 2); }, 0) / (n - 1);
+    var sd = Math.sqrt(variance);
+    if (sd === 0) return null;
+    var cpu = (usl - mean) / (3 * sd);
+    var cpl = (mean - lsl) / (3 * sd);
+    return Math.min(cpu, cpl);
+  }
+
+  function randn(){
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function ruleCheck(hist, sigma, cl){
+    var n = hist.length;
+    if (n < 1) return [];
+    var triggered = [];
+    var last = hist[n - 1];
+
+    if (Math.abs(last - cl) > 3 * sigma) triggered.push("Rule1");
+
+    if (n >= 3){
+      var w3 = hist.slice(n - 3);
+      var up2 = w3.filter(function(v){ return v - cl > 2 * sigma; }).length;
+      var dn2 = w3.filter(function(v){ return cl - v > 2 * sigma; }).length;
+      if (up2 >= 2 || dn2 >= 2) triggered.push("Rule2");
+    }
+    if (n >= 5){
+      var w5 = hist.slice(n - 5);
+      var up1 = w5.filter(function(v){ return v - cl > sigma; }).length;
+      var dn1 = w5.filter(function(v){ return cl - v > sigma; }).length;
+      if (up1 >= 4 || dn1 >= 4) triggered.push("Rule3");
+    }
+    if (n >= 9){
+      var w9 = hist.slice(n - 9);
+      var allUp = w9.every(function(v){ return v > cl; });
+      var allDn = w9.every(function(v){ return v < cl; });
+      if (allUp || allDn) triggered.push("Rule4");
+    }
+    if (n >= 15){
+      var w15 = hist.slice(n - 15);
+      var allNear = w15.every(function(v){ return Math.abs(v - cl) < sigma; });
+      if (allNear) triggered.push("Rule5");
+    }
+    return triggered;
+  }
+
+  var RULE_LABEL = {
+    Rule1: "Rule1 · 개별값 3σ 초과",
+    Rule2: "Rule2 · 3중2, ±2σ",
+    Rule3: "Rule3 · 5중4, ±1σ",
+    Rule4: "Rule4 · 9연속 한쪽",
+    Rule5: "Rule5 · 15점 밀집 ±1σ"
+  };
+
+  // ---------- OCAP (Out-of-Control Action Plan) 대응조치 매핑 ----------
+  // 기준서 5.5절(표17 이탈유형별 진입단계, 그림7 조정 매트릭스) 근거.
+  // Rule2~4는 모두 "런 규칙 위반"으로 동일한 담당·보고 체계를 갖는다.
+  var OCAP_INFO = {
+    Rule1: {
+      title: "Rule1 · 개별값 3σ 초과",
+      category: "관리한계 이탈",
+      role: "라인담당자 확인 → 같은 채널 3회 반복 시 공정엔지니어 에스컬레이션",
+      autofix: "즉시 보정 실행 · 자동보정 이력 DB 기록",
+      report: "즉시 알람",
+      note: "급격한 단발성 이상입니다. 주입·설비 변동 등 원인부터 먼저 확인하세요."
+    },
+    Rule2: {
+      title: "Rule2 · 3중2, ±2σ",
+      category: "런 규칙 위반",
+      role: "라인담당자 확인 → 공정엔지니어 에스컬레이션",
+      autofix: "즉시 보정 실행 · 자동보정 이력 DB 기록",
+      report: "정기 보고 (1시간마다)",
+      note: "서서히 쌓이는 편향 신호입니다. 급발생이 아니라 추세로 다뤄야 합니다."
+    },
+    Rule3: {
+      title: "Rule3 · 5중4, ±1σ",
+      category: "런 규칙 위반",
+      role: "라인담당자 확인 → 공정엔지니어 에스컬레이션",
+      autofix: "즉시 보정 실행 · 자동보정 이력 DB 기록",
+      report: "정기 보고 (1시간마다)",
+      note: "서서히 쌓이는 편향 신호입니다. 급발생이 아니라 추세로 다뤄야 합니다."
+    },
+    Rule4: {
+      title: "Rule4 · 9연속 한쪽",
+      category: "런 규칙 위반",
+      role: "라인담당자 확인 → 공정엔지니어 에스컬레이션",
+      autofix: "즉시 보정 실행 · 자동보정 이력 DB 기록",
+      report: "정기 보고 (1시간마다)",
+      note: "서서히 쌓이는 편향 신호입니다. 급발생이 아니라 추세로 다뤄야 합니다."
+    },
+    Rule5: {
+      title: "Rule5 · 15점 밀집 ±1σ",
+      category: "산포 협착 · 층화 의심",
+      role: "품질담당자가 직접 원인조사 (자동보정 대상 아님)",
+      autofix: "없음 — 자동보정 금지",
+      report: "즉시 알람",
+      note: "산포가 비정상적으로 좁아졌거나 서로 다른 조건의 데이터가 섞였을 가능성이 있습니다."
+    }
+  };
+
+  // Frozen copy of the shipped OCAP text, kept only so the edit modal's
+  // "기본값으로 초기화" button can restore it - OCAP_INFO itself is the live,
+  // editable copy that buildOcapHTML() always reads from.
+  var OCAP_INFO_DEFAULT = JSON.parse(JSON.stringify(OCAP_INFO));
+  var OCAP_FIELDS = [
+    { key: "title", label: "제목", multiline: false },
+    { key: "category", label: "분류", multiline: false },
+    { key: "role", label: "담당·에스컬레이션", multiline: false },
+    { key: "autofix", label: "자동보정", multiline: false },
+    { key: "report", label: "보고", multiline: false },
+    { key: "note", label: "설명", multiline: true }
+  ];
+
+  function buildOcapHTML(chId, rules, extraFor){
+    // extraFor(rule) is an optional hook returning extra HTML to inject at
+    // the bottom of that specific rule's own .ocap-rule box (used by the
+    // per-rule alert panels to place the "확인" button INSIDE the run-rule
+    // box itself, bottom-right) - unused by the log-row OCAP popover call.
+    var chDef = CHANNEL_DEFS[chId];
+    var chLabel = chDef ? (chDef.icon + " " + chDef.label) : "";
+    var cards = (rules || []).map(function(r){
+      var o = OCAP_INFO[r];
+      if (!o) return "";
+      var extra = (typeof extraFor === "function") ? (extraFor(r) || "") : "";
+      return '<div class="ocap-rule" style="--ocap-color:' + RULE_COLOR[r].hex + '">' +
+          '<div class="ocap-rule-head"><span class="ocap-rule-title">' + o.title + '</span><span class="ocap-rule-cat">' + o.category + '</span></div>' +
+          '<div class="ocap-row"><span class="ocap-k">담당·에스컬레이션</span><span class="ocap-v">' + o.role + '</span></div>' +
+          '<div class="ocap-row"><span class="ocap-k">자동보정</span><span class="ocap-v">' + o.autofix + '</span></div>' +
+          '<div class="ocap-row"><span class="ocap-k">보고</span><span class="ocap-v">' + o.report + '</span></div>' +
+          '<p class="ocap-note">' + o.note + '</p>' +
+          extra +
+        '</div>';
+    }).join("");
+    return '<div class="ocap-ch">' + chLabel + ' 채널에서 감지된 이상 · 기준서 5.5절(표17) 근거</div>' + cards;
+  }
+
+  // Readout value (#currentVal) is always shown with 4 decimal places, and
+  // its integer part is left-padded with non-breaking spaces to a fixed
+  // 3-digit width. IBM Plex Mono + font-variant-numeric:tabular-nums gives
+  // every character (digits, ".", and " ") an identical advance width,
+  // so this pins the decimal point to the exact same x position no matter
+  // which channel is shown or how many integer digits its value has (belt
+  // "1.xxxx" vs conveyor "283.xxxx"). Scoped only to this readout - axis
+  // labels, hover-info, and Cpk still use each channel's own def.decimals.
+  var CURRENT_VAL_INT_WIDTH = 3;
+  function formatFixedWidthVal(value){
+    var s = value.toFixed(4);
+    var dot = s.indexOf(".");
+    var intPart = dot === -1 ? s : s.slice(0, dot);
+    var rest = dot === -1 ? "" : s.slice(dot);
+    var padCount = Math.max(0, CURRENT_VAL_INT_WIDTH - intPart.length);
+    var pad = "";
+    for (var i = 0; i < padCount; i++) pad += " ";
+    return pad + intPart + rest;
+  }
+
+  function fmtTime(t){
+    var m = Math.floor(t / 60), s = t % 60;
+    return (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
+  }
+
+  function pushLog(chId, rule, mode){
+    state.log.unshift({ t: state.tick, ch: chId, rule: rule, mode: mode });
+    if (state.log.length > 40) state.log.pop();
+    state.violCount++;
+  }
+
+  function rampFracFor(pairId){
+    var inj = inject[pairId];
+    if (!inj.active) return 0;
+    return Math.min(1, inj.t / INJECT_RAMP);
+  }
+
+  function pushRaw(id, val){
+    var def = CHANNEL_DEFS[id];
+    var s = chState[id];
+    s.rawHistory.push(val);
+    if (s.rawHistory.length > MAX_RAW) s.rawHistory.shift();
+    var trig = ruleCheck(s.rawHistory, def.rawSigma, def.mu);
+    trig.forEach(function(r){
+      if (s.rawPrevTrig.indexOf(r) === -1) pushLog(id, r, "초단위");
+      // 정기 보고 대상(Rule2~4)은 판정 로그에는 즉시 남기되, 화면 알림은
+      // 다음 시간당 청크 경계에서 한꺼번에 공개한다 - accumulate here,
+      // released by the chunk-boundary flush in tick().
+      if (RULE_BATCHED[r]) s.pendingBatch[r] = true;
+    });
+    s.rawPrevTrig = trig;
+    s.alarm = trig.length > 0 || s.chunkPrevTrig.length > 0;
+
+    // Record the combined (raw+chunk) alarm color that was actually blinking
+    // the moment this instance arrived, alongside rawHistory. Hovering this
+    // point later always shows the color from right here, not whatever the
+    // channel happens to be blinking now.
+    var allTrigNow = trig.concat(s.chunkPrevTrig).filter(function(v, i, a){ return a.indexOf(v) === i; });
+    var worstNow = worstRule(allTrigNow);
+    s.rawWorstColor.push(worstNow ? RULE_COLOR[worstNow].hex : null);
+    if (s.rawWorstColor.length > MAX_RAW) s.rawWorstColor.shift();
+  }
+
+  function updateChunk(id){
+    var def = CHANNEL_DEFS[id];
+    var s = chState[id];
+    var recentN = Math.min(CHUNK_SIZE, s.rawHistory.length);
+    if (recentN === 0) return;
+    var recent = s.rawHistory.slice(s.rawHistory.length - recentN);
+    var chunkVal = recent.reduce(function(a, b){ return a + b; }, 0) / recent.length;
+    s.chunkHistory.push(chunkVal);
+    if (s.chunkHistory.length > MAX_CHUNK) s.chunkHistory.shift();
+
+    if (def.usl !== undefined){
+      var cpk = computeCpk(recent, def.usl, def.lsl);
+      if (cpk !== null) s.cpk = cpk;
+    }
+
+    var trig = ruleCheck(s.chunkHistory, def.chunkSigma, def.mu);
+    trig.forEach(function(r){
+      if (s.chunkPrevTrig.indexOf(r) === -1) pushLog(id, r, "시간당 청크");
+      if (RULE_BATCHED[r]) s.pendingBatch[r] = true;
+    });
+    s.chunkPrevTrig = trig;
+    s.alarm = s.rawPrevTrig.length > 0 || trig.length > 0;
+
+    var allTrigNow = trig.concat(s.rawPrevTrig).filter(function(v, i, a){ return a.indexOf(v) === i; });
+    var worstNow = worstRule(allTrigNow);
+    s.chunkWorstColor.push(worstNow ? RULE_COLOR[worstNow].hex : null);
+    if (s.chunkWorstColor.length > MAX_CHUNK) s.chunkWorstColor.shift();
+  }
+
+  // 정기 보고 경계(=압축된 1시간, 15틱): 방금 끝난 청크 구간 동안 쌓인 정기
+  // 보고 대상(Rule2~4)을 한꺼번에 "보고"로 공개하고, 다음 구간을 위해
+  // 누적함을 비운다. reportedBatch는 다음 경계까지 한 구간 동안 살아있는
+  // 채로 라이브 표시(상태 pill/차트 점멸/탭 배지)에 반영되며, 경고칩
+  // (#alerts)에는 이 시점에 한 번 등록되어 확인 전까지 남는다.
+  function flushReportBatch(){
+    CHANNEL_IDS.forEach(function(id){
+      var s = chState[id];
+      s.reportedBatch = s.pendingBatch;
+      s.pendingBatch = {};
+    });
+  }
+
+  function updatePair(causeId, effectId){
+    var causeDef = CHANNEL_DEFS[causeId];
+    var effectDef = CHANNEL_DEFS[effectId];
+    var pairId = effectDef.pair;
+    var rampFrac = rampFracFor(pairId);
+
+    var causeShift = rampFrac * (6 * causeDef.sigma);
+    var causeVal = causeDef.mu + causeDef.sigma * randn() + causeShift;
+    pushRaw(causeId, causeVal);
+
+    var noiseMult = 1 + (INJECT_NOISE_MULT - 1) * rampFrac;
+    var noise = effectDef.noiseSigma * noiseMult * randn();
+    var effectVal = effectDef.mu + effectDef.beta * (causeVal - causeDef.mu) + noise;
+    pushRaw(effectId, effectVal);
+  }
+
+  function updateStandalone(id){
+    var def = CHANNEL_DEFS[id];
+    var rampFrac = rampFracFor(def.pair);
+    var shift = rampFrac * (6 * def.sigma);
+    var noiseMult = 1 + (INJECT_NOISE_MULT - 1) * rampFrac;
+    var val = def.mu + def.sigma * noiseMult * randn() + shift;
+    pushRaw(id, val);
+  }
+
+  function tick(){
+    state.tick++;
+
+    ["chi", "oe", "belt"].forEach(function(pairId){
+      var inj = inject[pairId];
+      var btn = document.getElementById(INJECT_BTN_ID[pairId]);
+      if (inj.active){
+        inj.t++;
+        if (inj.t >= INJECT_TICKS){
+          inj.active = false;
+          inj.t = 0;
+          btn.disabled = false;
+          btn.textContent = injectLabel(pairId);
+        } else {
+          btn.textContent = "주입 중… (" + (INJECT_TICKS - inj.t) + "틱 남음)";
+        }
+      }
+    });
+
+    updatePair("conveyor", "chi");
+    updatePair("salt", "oe");
+    updateStandalone("belt");
+
+    if (state.tick % CHUNK_SIZE === 0){
+      CHANNEL_IDS.forEach(function(id){ updateChunk(id); });
+      flushReportBatch();
+    }
+
+    render();
+  }
+
+  // ---------- rendering ----------
+  var canvas = document.getElementById("chart");
+  var ctx = canvas.getContext("2d");
+  var hoverPixelX = null;
+
+  canvas.addEventListener("pointermove", function(evt){
+    var rect = canvas.getBoundingClientRect();
+    hoverPixelX = evt.clientX - rect.left;
+    drawChart();
+  });
+  canvas.addEventListener("pointerleave", function(){
+    hoverPixelX = null;
+    drawChart();
+  });
+
+  function css(varName){
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  }
+
+  function resizeCanvas(){
+    var rect = canvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function drawChart(){
+    var id = state.activeCh;
+    var def = CHANNEL_DEFS[id];
+    var s = chState[id];
+    var rect = canvas.getBoundingClientRect();
+    var w = rect.width, h = rect.height;
+    ctx.clearRect(0, 0, w, h);
+
+    var mode = state.mode;
+    var data = mode === "raw" ? s.rawHistory : s.chunkHistory;
+    var sigma = mode === "raw" ? def.rawSigma : def.chunkSigma;
+    var cl = def.mu;
+    var span = 3.6 * sigma;
+    var yTop = cl + span, yBot = cl - span;
+    var dp = def.decimals;
+
+    var mutedColor = css("--ink-muted"), critColor = css("--crit"), traceColor = css("--trace");
+
+    var levels = [
+      { v: cl, key: "cl", label: "CL " + cl.toFixed(dp), color: mutedColor, solid: true },
+      { v: cl + sigma, key: "p1", label: "+1σ", color: mutedColor, solid: false },
+      { v: cl - sigma, key: "m1", label: "-1σ", color: mutedColor, solid: false },
+      { v: cl + 2 * sigma, key: "p2", label: "+2σ", color: mutedColor, solid: false },
+      { v: cl - 2 * sigma, key: "m2", label: "-2σ", color: mutedColor, solid: false },
+      { v: cl + 3 * sigma, key: "ucl", label: "UCL " + (cl + 3 * sigma).toFixed(dp), color: critColor, solid: true },
+      { v: cl - 3 * sigma, key: "lcl", label: "LCL " + (cl - 3 * sigma).toFixed(dp), color: critColor, solid: true }
+    ];
+
+    ctx.font = "10.5px 'IBM Plex Mono', monospace";
+    ctx.textBaseline = "middle";
+
+    var maxLabelW = 0;
+    levels.forEach(function(lv){
+      var lw = ctx.measureText(lv.label).width;
+      if (lw > maxLabelW) maxLabelW = lw;
+    });
+
+    var padL = Math.ceil(maxLabelW) + 20, padR = 14, padT = 10, padB = 18;
+    var plotW = w - padL - padR, plotH = h - padT - padB;
+
+    function yPix(v){ return padT + (yTop - v) / (yTop - yBot) * plotH; }
+
+    levels.forEach(function(lv){
+      var y = yPix(lv.v);
+      ctx.beginPath();
+      ctx.strokeStyle = lv.color;
+      ctx.globalAlpha = lv.solid ? 0.9 : 0.55;
+      ctx.setLineDash(lv.solid ? [] : [4, 4]);
+      ctx.lineWidth = lv.key === "cl" ? 1.4 : (lv.key === "ucl" || lv.key === "lcl" ? 1.2 : 1);
+      ctx.moveTo(padL, y);
+      ctx.lineTo(w - padR, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = lv.color;
+      ctx.textAlign = "right";
+      ctx.fillText(lv.label, padL - 6, y);
+    });
+
+    if (data.length > 1){
+      for (var si = 0; si < data.length - 1; si++){
+        var sx1 = padL + (si / (data.length - 1)) * plotW;
+        var sy1 = yPix(Math.max(yBot, Math.min(yTop, data[si])));
+        var sx2 = padL + ((si + 1) / (data.length - 1)) * plotW;
+        var sy2 = yPix(Math.max(yBot, Math.min(yTop, data[si + 1])));
+        var sOut1 = Math.abs(data[si] - cl) > 3 * sigma;
+        var sOut2 = Math.abs(data[si + 1] - cl) > 3 * sigma;
+        var segOut = sOut1 || sOut2;
+        ctx.beginPath();
+        ctx.strokeStyle = segOut ? critColor : traceColor;
+        ctx.lineWidth = 1.8;
+        ctx.moveTo(sx1, sy1);
+        ctx.lineTo(sx2, sy2);
+        ctx.stroke();
+      }
+
+      data.forEach(function(v, i){
+        var x = padL + (i / (Math.max(data.length - 1, 1))) * plotW;
+        var y = yPix(Math.max(yBot, Math.min(yTop, v)));
+        var out = Math.abs(v - cl) > 3 * sigma;
+        ctx.beginPath();
+        ctx.fillStyle = out ? critColor : traceColor;
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    if (hoverPixelX !== null && data.length > 0){
+      var clampedX = Math.max(padL, Math.min(w - padR, hoverPixelX));
+      var n = data.length;
+      var hIdx = Math.round((clampedX - padL) / plotW * (n - 1));
+      hIdx = Math.max(0, Math.min(n - 1, hIdx));
+      var hVal = data[hIdx];
+      var hx = padL + (hIdx / Math.max(n - 1, 1)) * plotW;
+      var hy = yPix(Math.max(yBot, Math.min(yTop, hVal)));
+
+      var isOut = Math.abs(hVal - cl) > 3 * sigma;
+      var ringColor = isOut ? critColor : traceColor;
+
+      ctx.save();
+      ctx.strokeStyle = mutedColor;
+      ctx.globalAlpha = 0.4;
+      ctx.setLineDash([2, 3]);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(hx, padT);
+      ctx.lineTo(hx, h - padB);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.fillStyle = css("--surface");
+      ctx.strokeStyle = ringColor;
+      ctx.lineWidth = 2.4;
+      ctx.arc(hx, hy, isOut ? 6 : 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (isOut){
+        ctx.beginPath();
+        ctx.fillStyle = ringColor;
+        ctx.arc(hx, hy, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // The value/time readout lives in the persistent pill fixed under the
+      // top-right legend (#hoverInfo), not in a floating canvas tooltip -
+      // hovering only fills it in, it never moves and never covers the chart.
+      var stepTicks = mode === "raw" ? 1 : CHUNK_SIZE;
+      var tickAtIdx = Math.max(0, state.tick - (n - 1 - hIdx) * stepTicks);
+      var valueText = hVal.toFixed(dp) + (def.unit ? " " + def.unit : "");
+      var timeText = fmtTime(tickAtIdx) + "s 경과";
+      // Look up the alarm color recorded for THIS instance when it arrived -
+      // not whatever the channel is blinking right now - so an old Rule1
+      // (yellow) point still shows yellow even after the channel has since
+      // escalated to Rule5 (red).
+      var worstColorHist = mode === "raw" ? s.rawWorstColor : s.chunkWorstColor;
+      var alarmColorAtIdx = worstColorHist[hIdx] || null;
+      setHoverInfo(valueText, timeText, isOut, alarmColorAtIdx);
+    } else if (data.length > 0){
+      // Nothing is hovered right now, so the card keeps streaming the
+      // latest incoming instance instead of sitting empty - it only ever
+      // shows a specific historical point while the pointer is over it.
+      var liveVal = data[data.length - 1];
+      var liveOut = Math.abs(liveVal - cl) > 3 * sigma;
+      var liveValueText = liveVal.toFixed(dp) + (def.unit ? " " + def.unit : "");
+      var liveTimeText = fmtTime(state.tick) + "s 경과";
+      var liveColorHist = mode === "raw" ? s.rawWorstColor : s.chunkWorstColor;
+      var liveAlarmColor = liveColorHist[liveColorHist.length - 1] || null;
+      setHoverInfo(liveValueText, liveTimeText, liveOut, liveAlarmColor);
+    } else {
+      clearHoverInfo();
+    }
+  }
+
+  function setHoverInfo(valueText, timeText, isOut, alarmColor){
+    var hoverInfo = document.getElementById("hoverInfo");
+    var hiValue = document.getElementById("hiValue");
+    var hiTime = document.getElementById("hiTime");
+    if (!hiValue || !hiTime) return;
+    hiValue.textContent = valueText;
+    hiTime.textContent = timeText;
+    hiValue.classList.remove("empty");
+    hiTime.classList.remove("empty");
+    hiValue.classList.toggle("crit", !!isOut);
+    // The card's border matches whatever color this channel's alarm is
+    // actually blinking right now (Rule1 연노랑 ... Rule5 짙은 빨강) - not a
+    // fixed Rule1 color - so a Rule5 alarm shows red on hover, not yellow.
+    // Falls back to Rule1's color if the point is out but no rule is
+    // currently active (e.g. hovering a past breach after it cleared).
+    if (hoverInfo) hoverInfo.style.borderColor = isOut ? (alarmColor || RULE_COLOR.Rule1.hex) : "";
+  }
+
+  function clearHoverInfo(){
+    // Only reached before any data exists at all (there is always at least
+    // one instance once the stream has started).
+    var hoverInfo = document.getElementById("hoverInfo");
+    var hiValue = document.getElementById("hiValue");
+    var hiTime = document.getElementById("hiTime");
+    if (!hiValue || !hiTime) return;
+    hiValue.textContent = "—";
+    hiTime.textContent = "—";
+    hiValue.classList.add("empty");
+    hiTime.classList.add("empty");
+    hiValue.classList.remove("crit");
+    if (hoverInfo) hoverInfo.style.borderColor = "";
+  }
+
+  // ---------- per-rule alert chips + action-plan panels ----------
+  // #alertRow / #alertPanels are shared DOM nodes (they always reflect
+  // whichever channel is active). Reconciled in place - by data-rule key -
+  // rather than wiped and rebuilt every call, so an open panel's CSS
+  // accordion transition (grid-template-rows 0fr<->1fr) still plays when the
+  // user toggles it, instead of snapping because the node was just
+  // recreated. The one exception is an actual channel switch: that DOES
+  // wipe and rebuild, since a reused "Rule1" node from another channel would
+  // otherwise show the wrong channel's OCAP text under the right label.
+  function renderAlerts(chId){
+    var alertRowEl = document.getElementById("alertRow");
+    var alertPanelsEl = document.getElementById("alertPanels");
+    if (!alertRowEl || !alertPanelsEl) return;
+    var s = chState[chId];
+    if (alertRowEl.getAttribute("data-active-ch") !== chId){
+      alertRowEl.innerHTML = "";
+      alertPanelsEl.innerHTML = "";
+      alertRowEl.setAttribute("data-active-ch", chId);
+    }
+    var rules = Object.keys(s.alerts || {}).sort(function(a, b){
+      return RULE_ORDER.indexOf(a) - RULE_ORDER.indexOf(b);
+    });
+    var ruleSet = {};
+    rules.forEach(function(r){ ruleSet[r] = true; });
+
+    // Drop chips/panels for rules no longer in the map (acknowledged).
+    Array.prototype.slice.call(alertRowEl.children).forEach(function(el){
+      if (!ruleSet[el.getAttribute("data-rule")]) el.remove();
+    });
+    Array.prototype.slice.call(alertPanelsEl.children).forEach(function(el){
+      if (!ruleSet[el.getAttribute("data-rule")]) el.remove();
+    });
+
+    rules.forEach(function(r){
+      var isOpen = !!(s.alertOpen && s.alertOpen[r]);
+
+      var chip = alertRowEl.querySelector('.alert-chip[data-rule="' + r + '"]');
+      if (!chip){
+        chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "alert-chip";
+        chip.setAttribute("data-rule", r);
+        chip.setAttribute("aria-haspopup", "true");
+        chip.title = "클릭하면 조치방안(OCAP) 보기";
+        chip.style.setProperty("--chip-color", RULE_COLOR[r].hex);
+        chip.style.setProperty("--chip-rgb", RULE_COLOR[r].rgb);
+        chip.innerHTML = '<span class="dot"></span><span>' + r.replace("Rule", "Rule ") + '</span><span class="chevron">›</span>';
+      }
+      chip.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      // Re-appending an already-present child moves it rather than
+      // duplicating it, so this both inserts brand-new chips AND keeps
+      // pre-existing ones in RULE_ORDER - without it, a chip added earlier
+      // (e.g. Rule3 triggering first) would stay stuck at whatever DOM
+      // position it first appeared in, ahead of an earlier rule added later.
+      alertRowEl.appendChild(chip);
+
+      var panel = alertPanelsEl.querySelector('.alert-panel[data-rule="' + r + '"]');
+      if (!panel){
+        panel = document.createElement("div");
+        panel.className = "alert-panel";
+        panel.setAttribute("data-rule", r);
+        panel.innerHTML = '<div class="alert-panel-inner">' + buildOcapHTML(chId, [r], function(rule){
+          return '<div class="ocap-actions"><button class="ack-btn" type="button" data-rule="' + rule + '" ' +
+            'style="--ack-color:' + RULE_COLOR[rule].hex + ';--ack-rgb:' + RULE_COLOR[rule].rgb + '">확인</button></div>';
+        }) + '</div>';
+      }
+      panel.classList.toggle("open", isOpen);
+      alertPanelsEl.appendChild(panel);
+    });
+  }
+
+  function render(){
+    var id = state.activeCh;
+    var def = CHANNEL_DEFS[id];
+    var s = chState[id];
+    var data = state.mode === "raw" ? s.rawHistory : s.chunkHistory;
+    var sigma = state.mode === "raw" ? def.rawSigma : def.chunkSigma;
+    var last = data.length ? data[data.length - 1] : def.mu;
+
+    document.getElementById("chTitleIcon").textContent = def.icon;
+    document.getElementById("chTitleLabel").textContent = def.label;
+    document.getElementById("currentVal").textContent = formatFixedWidthVal(last);
+    document.getElementById("currentUnit").innerHTML = '<span class="unit-prefix">' + (def.unit || "") + '</span> · ' +
+      "<span id=\"modeLabel\">" + (state.mode === "raw" ? "초단위" : "시간당 청크") + "</span>";
+    document.getElementById("statTicks").textContent = state.tick;
+    document.getElementById("statViol").textContent = state.violCount;
+    document.getElementById("statSigma").textContent = (Math.abs(last - def.mu) / sigma).toFixed(2) + "σ";
+
+    var cpkEl = document.getElementById("statCpk");
+    if (def.usl !== undefined){
+      if (s.cpk === null || s.cpk === undefined){
+        cpkEl.textContent = "측정 중…";
+        cpkEl.style.color = "";
+      } else {
+        cpkEl.textContent = s.cpk.toFixed(3);
+        cpkEl.style.color = s.cpk >= 1.33 ? "var(--ok)" : (s.cpk >= 1.0 ? RULE_COLOR.Rule2.hex : RULE_COLOR.Rule5.hex);
+      }
+    } else {
+      cpkEl.textContent = "규격 없음";
+      cpkEl.style.color = "";
+    }
+
+    var allTrig = visibleTrigFor(id);
+    var worst = worstRule(allTrig);
+
+    var pill = document.getElementById("statusPill");
+    var text = document.getElementById("statusText");
+    if (allTrig.length > 0 && worst){
+      pill.classList.add("crit");
+      pill.style.background = "rgba(" + RULE_COLOR[worst].rgb + ",.16)";
+      pill.style.color = RULE_COLOR[worst].hex;
+      text.textContent = def.label + " 이상 감지 · " + allTrig.map(function(r){ return RULE_LABEL[r]; }).join(" / ");
+    } else {
+      pill.classList.remove("crit");
+      pill.style.background = "";
+      pill.style.color = "";
+      text.textContent = "정상";
+    }
+
+    // Chart-top alert chips: one PER rule currently open in this channel's
+    // own alerts map (added the instant a rule first breaches). They persist
+    // - across ticks, across tab switches - until the user clicks the "확인"
+    // button on that rule's own panel; the underlying condition clearing on
+    // its own does NOT remove the chip. renderAlerts() reconciles the DOM
+    // in place (never a full innerHTML wipe) so an already-open panel keeps
+    // its animation state instead of snapping.
+    allTrig.forEach(function(r){ s.alerts[r] = true; });
+    renderAlerts(id);
+
+    var chartCard = document.getElementById("chartCard");
+    if (allTrig.length > 0 && worst){
+      chartCard.classList.add("alarm");
+      chartCard.style.setProperty("--alarm-color", RULE_COLOR[worst].hex);
+      chartCard.style.setProperty("--alarm-rgb", RULE_COLOR[worst].rgb);
+    } else {
+      chartCard.classList.remove("alarm");
+      chartCard.style.removeProperty("--alarm-color");
+      chartCard.style.removeProperty("--alarm-rgb");
+    }
+
+    CHANNEL_IDS.forEach(function(cid){
+      var btn = document.querySelector('.tab-btn[data-ch="' + cid + '"]');
+      if (!btn) return;
+      var cVis = visibleTrigFor(cid);
+      var cWorst = worstRule(cVis);
+      if (cVis.length > 0 && cWorst){
+        btn.classList.add("alarm");
+        var badge = btn.querySelector(".dot-badge");
+        if (badge) badge.style.setProperty("--badge-color", RULE_COLOR[cWorst].hex);
+      } else {
+        btn.classList.remove("alarm");
+      }
+    });
+
+    var logList = document.getElementById("logList");
+    if (state.log.length === 0){
+      logList.innerHTML = '<div class="log-empty">아직 감지된 이상이 없습니다.</div>';
+    } else {
+      logList.innerHTML = state.log.map(function(e){
+        var chDef = CHANNEL_DEFS[e.ch];
+        return '<div class="log-row" data-ch="' + e.ch + '" data-rule="' + e.rule + '" role="button" tabindex="0">' +
+          '<time>' + fmtTime(e.t) + "</time>" +
+          '<span class="ch-chip">' + chDef.icon + " " + chDef.label + '</span>' +
+          '<span class="rule">' + RULE_LABEL[e.rule] + '</span>' +
+          '<span class="mode-badge">' + e.mode + "</span></div>";
+      }).join("");
+    }
+
+    drawChart();
+  }
+
+  // ---------- controls ----------
+  var timer = null;
+  function startTimer(){
+    if (timer) return;
+    timer = setInterval(tick, TICK_MS);
+  }
+  function stopTimer(){
+    if (timer){ clearInterval(timer); timer = null; }
+  }
+
+  document.querySelectorAll(".tab-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      state.activeCh = btn.getAttribute("data-ch");
+      document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.remove("active"); });
+      btn.classList.add("active");
+      // Each channel keeps its own alerts map (chState[id].alerts /
+      // alertOpen), so switching tabs simply re-renders with that channel's
+      // own unacknowledged alerts - renderAlerts() rebuilds the shared dock
+      // for the newly-active channel instead of carrying over stale content.
+      render();
+    });
+  });
+
+  document.getElementById("modeRawBtn").addEventListener("click", function(){
+    state.mode = "raw";
+    this.classList.add("active");
+    document.getElementById("modeChunkBtn").classList.remove("active");
+    render();
+  });
+  document.getElementById("modeChunkBtn").addEventListener("click", function(){
+    state.mode = "chunk";
+    this.classList.add("active");
+    document.getElementById("modeRawBtn").classList.remove("active");
+    render();
+  });
+
+  document.getElementById("playBtn").addEventListener("click", function(){
+    state.running = !state.running;
+    this.textContent = state.running ? "일시정지" : "재생";
+    if (state.running) startTimer(); else stopTimer();
+  });
+
+  document.getElementById("resetBtn").addEventListener("click", function(){
+    state.tick = 0;
+    state.violCount = 0;
+    state.log = [];
+    ["chi", "oe", "belt"].forEach(function(pairId){
+      inject[pairId].active = false;
+      inject[pairId].t = 0;
+      var btn = document.getElementById(INJECT_BTN_ID[pairId]);
+      btn.disabled = false;
+      btn.textContent = injectLabel(pairId);
+    });
+    CHANNEL_IDS.forEach(function(id){
+      chState[id] = { rawHistory: [], chunkHistory: [], rawPrevTrig: [], chunkPrevTrig: [], rawWorstColor: [], chunkWorstColor: [], alarm: false, cpk: null, alerts: {}, alertOpen: {}, pendingBatch: {}, reportedBatch: {} };
+    });
+    render();
+  });
+
+  document.getElementById("injectChiBtn").addEventListener("click", function(){
+    if (inject.chi.active) return;
+    inject.chi.active = true;
+    inject.chi.t = 0;
+    this.disabled = true;
+  });
+  document.getElementById("injectSaltBtn").addEventListener("click", function(){
+    if (inject.oe.active) return;
+    inject.oe.active = true;
+    inject.oe.t = 0;
+    this.disabled = true;
+  });
+  document.getElementById("injectBeltBtn").addEventListener("click", function(){
+    if (inject.belt.active) return;
+    inject.belt.active = true;
+    inject.belt.t = 0;
+    this.disabled = true;
+  });
+
+  window.addEventListener("resize", function(){ resizeCanvas(); drawChart(); });
+
+  if (window.ResizeObserver){
+    var chartResizeObserver = new ResizeObserver(function(){
+      resizeCanvas();
+      drawChart();
+    });
+    chartResizeObserver.observe(canvas);
+  }
+
+  // ---------- collapsible log panel (fixed button, bottom-right) ----------
+  var logToggleBtn = document.getElementById("logToggleBtn");
+  var logPanel = document.getElementById("logPanel");
+  logToggleBtn.addEventListener("click", function(){
+    var isOpen = !logPanel.classList.contains("open");
+    logPanel.classList.toggle("open", isOpen);
+    logToggleBtn.classList.toggle("open", isOpen);
+    logToggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    // The main content compresses (narrower max-width + right padding) in
+    // lockstep with the log panel's own expand/collapse transition, so the
+    // opened panel never sits on top of the chart or buttons - and both
+    // animate back together when the log is collapsed again.
+    document.body.classList.toggle("log-open", isOpen);
+  });
+
+  // ---------- per-rule alert chips: click a chip to toggle its own panel;
+  // click "확인" on a panel to acknowledge (permanently dismiss) just that
+  // one alert. Both are delegated on the shared containers since renderAlerts()
+  // adds/removes individual chip and panel nodes as alerts come and go. ----------
+  document.getElementById("alertRow").addEventListener("click", function(evt){
+    var chip = evt.target.closest(".alert-chip");
+    if (!chip) return;
+    var r = chip.getAttribute("data-rule");
+    var s = chState[state.activeCh];
+    if (!s.alertOpen) s.alertOpen = {};
+    s.alertOpen[r] = !s.alertOpen[r];
+    renderAlerts(state.activeCh);
+  });
+  document.getElementById("alertPanels").addEventListener("click", function(evt){
+    var btn = evt.target.closest(".ack-btn");
+    if (!btn) return;
+    var r = btn.getAttribute("data-rule");
+    var s = chState[state.activeCh];
+    if (s.alerts) delete s.alerts[r];
+    if (s.alertOpen) delete s.alertOpen[r];
+    renderAlerts(state.activeCh);
+  });
+
+  // ---------- OCAP action-plan popover (opened by clicking a 판정 로그 row) ----------
+  // Shows only that one row's single rule, to the right of the log panel
+  // inside the shared .log-dock (wraps below it on narrow viewports).
+  var ocapPanel = document.getElementById("ocapPanel");
+  var ocapCloseBtn = document.getElementById("ocapCloseBtn");
+  var ocapBody = document.getElementById("ocapBody");
+  var logList = document.getElementById("logList");
+  // Remembers which channel/rule the log-row popover is currently showing,
+  // purely so the edit modal can refresh its text in place after a save
+  // instead of leaving stale wording on screen behind the modal.
+  var lastLogOcap = { ch: null, rule: null };
+  function openOcapForLogRow(row){
+    var ch = row.getAttribute("data-ch");
+    var rule = row.getAttribute("data-rule");
+    if (!ch || !rule) return;
+    lastLogOcap.ch = ch;
+    lastLogOcap.rule = rule;
+    ocapBody.innerHTML = buildOcapHTML(ch, [rule]);
+    ocapPanel.classList.add("open");
+    document.body.classList.add("ocap-open");
+  }
+  logList.addEventListener("click", function(evt){
+    var row = evt.target.closest(".log-row");
+    if (row) openOcapForLogRow(row);
+  });
+  logList.addEventListener("keydown", function(evt){
+    if (evt.key !== "Enter" && evt.key !== " ") return;
+    var row = evt.target.closest(".log-row");
+    if (!row) return;
+    evt.preventDefault();
+    openOcapForLogRow(row);
+  });
+  ocapCloseBtn.addEventListener("click", function(){
+    ocapPanel.classList.remove("open");
+    document.body.classList.remove("ocap-open");
+  });
+
+  // ---------- click-outside-closes-both (log panel + its OCAP popover) ----------
+  // Previously the log panel needed the log FAB clicked again and the OCAP
+  // popover needed its own X - now a single click anywhere outside the dock
+  // (and outside the log FAB itself, which already toggles the log panel)
+  // closes whichever of the two is open.
+  var logDock = document.getElementById("logDock");
+  document.addEventListener("click", function(evt){
+    var logIsOpen = logPanel.classList.contains("open");
+    var ocapIsOpen = ocapPanel.classList.contains("open");
+    if (!logIsOpen && !ocapIsOpen) return;
+    if (logDock.contains(evt.target) || logToggleBtn.contains(evt.target)) return;
+    logPanel.classList.remove("open");
+    logToggleBtn.classList.remove("open");
+    logToggleBtn.setAttribute("aria-expanded", "false");
+    ocapPanel.classList.remove("open");
+    document.body.classList.remove("log-open");
+    document.body.classList.remove("ocap-open");
+  });
+
+  // ---------- edit modal: rewrite the OCAP text shown when a rule alert is
+  // clicked, without touching code (개발팀 요청사항: [수정] 버튼). ----------
+  var editOcapBtn = document.getElementById("editOcapBtn");
+  var editModalOverlay = document.getElementById("editModalOverlay");
+  var editModalBody = document.getElementById("editModalBody");
+  var editModalCloseBtn = document.getElementById("editModalCloseBtn");
+  var editCancelBtn = document.getElementById("editCancelBtn");
+  var editSaveBtn = document.getElementById("editSaveBtn");
+  var editResetBtn = document.getElementById("editResetBtn");
+
+  function escHtml(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function fillEditModalBody(){
+    editModalBody.innerHTML = RULE_ORDER.map(function(r){
+      var o = OCAP_INFO[r];
+      var fields = OCAP_FIELDS.map(function(f){
+        var val = escHtml(o[f.key]);
+        var control = f.multiline
+          ? '<textarea rows="2" data-rule="' + r + '" data-field="' + f.key + '">' + val + '</textarea>'
+          : '<input type="text" data-rule="' + r + '" data-field="' + f.key + '" value="' + val + '">';
+        return '<label class="edit-field"><span>' + f.label + '</span>' + control + '</label>';
+      }).join("");
+      return '<div class="edit-rule" style="--ocap-color:' + RULE_COLOR[r].hex + '">' +
+        '<span class="edit-rule-tag">' + r.replace("Rule", "Rule ") + '</span>' + fields + '</div>';
+    }).join("");
+  }
+
+  // After a save (or reset), any OCAP text already on screen - an open
+  // alert panel, or the log-row popover - has to be rebuilt in place so
+  // the edit is visible immediately instead of only on the next click.
+  function refreshLiveOcapText(){
+    var alertRowEl = document.getElementById("alertRow");
+    var alertPanelsEl = document.getElementById("alertPanels");
+    if (alertRowEl) alertRowEl.removeAttribute("data-active-ch");
+    if (alertPanelsEl) alertPanelsEl.innerHTML = "";
+    if (alertRowEl) alertRowEl.innerHTML = "";
+    renderAlerts(state.activeCh);
+    if (ocapPanel.classList.contains("open") && lastLogOcap.ch && lastLogOcap.rule){
+      ocapBody.innerHTML = buildOcapHTML(lastLogOcap.ch, [lastLogOcap.rule]);
+    }
+  }
+
+  function openEditModal(){
+    fillEditModalBody();
+    editModalOverlay.classList.add("open");
+    document.body.classList.add("edit-open");
+  }
+  function closeEditModal(){
+    editModalOverlay.classList.remove("open");
+    document.body.classList.remove("edit-open");
+  }
+
+  editOcapBtn.addEventListener("click", openEditModal);
+  editModalCloseBtn.addEventListener("click", closeEditModal);
+  editCancelBtn.addEventListener("click", closeEditModal);
+  editModalOverlay.addEventListener("click", function(evt){
+    if (evt.target === editModalOverlay) closeEditModal();
+  });
+  document.addEventListener("keydown", function(evt){
+    if (evt.key === "Escape" && editModalOverlay.classList.contains("open")) closeEditModal();
+  });
+
+  editSaveBtn.addEventListener("click", function(){
+    editModalBody.querySelectorAll("[data-rule][data-field]").forEach(function(el){
+      var r = el.getAttribute("data-rule"), f = el.getAttribute("data-field");
+      if (OCAP_INFO[r]) OCAP_INFO[r][f] = el.value;
+    });
+    refreshLiveOcapText();
+    closeEditModal();
+  });
+
+  editResetBtn.addEventListener("click", function(){
+    RULE_ORDER.forEach(function(r){
+      OCAP_INFO[r] = JSON.parse(JSON.stringify(OCAP_INFO_DEFAULT[r]));
+    });
+    fillEditModalBody();
+    refreshLiveOcapText();
+  });
+
+  // ---------- boot: seed with example data so the page opens already in motion ----------
+  function seed(){
+    for (var i = 0; i < 90; i++) tick();
+  }
+
+  resizeCanvas();
+  seed();
+  startTimer();
+})();
+</script>
+
+</body>
+</html>
