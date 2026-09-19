@@ -1,19 +1,13 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>공정 인과 관리도</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>html,body{margin:0;padding:0;}</style>
 </head>
 <body>
-
-
-
-
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     color-scheme: light;
@@ -83,27 +77,132 @@
     color:var(--ink);
     font-family:var(--sans);
     padding-inline:16px;
-    padding-block:28px;
+    padding-block:16px 28px;
     --log-panel-w:540px;
   }
   .wrap{
     max-width:1040px; margin-inline:auto; display:flex; flex-direction:column; gap:16px;
     transition:filter .32s ease;
   }
-  body.log-open .wrap, body.ocap-open .wrap, body.edit-open .wrap{ filter:blur(6px); }
+  /* report-picker-open은 의도적으로 이 목록에서 제외한다 - "보고서 출력"
+     버튼을 눌러 일간/주간/월간/연간 버튼이 옆에 뜨는 단계는 로그창처럼
+     가볍게 열리는 선택 UI일 뿐이라 배경을 블러 처리하지 않는다. 실제
+     보고서 내용이 중앙 모달(report-modal-open)로 뜰 때만 블러 처리한다. */
+  body.log-open .wrap, body.ocap-open .wrap, body.edit-open .wrap, body.report-modal-open .wrap{ filter:blur(6px); }
 
-  .hdr{ display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:14px; }
-  .hdr h1{ font-size:22px; font-weight:700; margin:0 0 4px; letter-spacing:-0.01em; }
+  /* .hdr 자체는 줄바꿈시키지 않는다(nowrap) - 왼쪽(제목+배지+공정버튼)
+     열은 줄어들 수 있게(min-width:0) 두고, 오른쪽(보고서출력/수정,
+     핵심 산출물)은 고정 폭을 유지시켜, 왼쪽 콘텐츠가 아무리 길어져도
+     오른쪽 버튼들이 절대 아래로 밀려나지 않게 한다. */
+  .hdr{ display:flex; flex-wrap:nowrap; align-items:flex-start; justify-content:space-between; gap:14px; }
+  .hdr > div:first-child{ flex:1 1 auto; min-width:0; }
+  .hdr-right{ flex:0 0 auto; }
+  /* 제목과 상태 배지를 한 줄에 놓는다. 배지 문구가 길어지면(예: 솔트컨베이어
+     + 룰 여러 개) 이 줄의 남는 공간만큼 오른쪽으로 늘어나다가, 공간이
+     부족해지면 title-row 안에서만(왼쪽 열 폭 안에서만) 줄바꿈된다 - 옆의
+     hdr-right(보고서출력/수정 버튼)를 밀어내리지 않는다. */
+  .title-row{ display:flex; align-items:center; flex-wrap:wrap; gap:12px; row-gap:6px; margin:0 0 4px; min-width:0; }
+  .hdr h1{ font-size:22px; font-weight:700; margin:0; letter-spacing:-0.01em; flex:none; }
   .hdr p{ margin:0; color:var(--ink-muted); font-size:13.5px; max-width:56ch; line-height:1.5; }
   .hdr-actions{ display:flex; align-items:center; gap:10px; }
 
-  .pill{
-    display:inline-flex; align-items:center; gap:7px;
-    padding:7px 14px; border-radius:999px; font-size:13px; font-weight:600;
-    background:var(--ok-bg); color:var(--ok); white-space:nowrap;
+  /* "보고서 출력" 버튼을 누르면 로그 패널(.log-panel)처럼 버튼 왼쪽으로
+     가로로 길게 스르륵 펼쳐지는 기간(일간/주간/월간/연간) 선택 패널.
+     배경 블러는 절대 일으키지 않는다(위 body 블러 선택자 목록에서
+     의도적으로 제외). max-width 전환을 써서 - grid-template-columns의
+     fr 트랙은 auto 너비 컨테이너에서 크기가 불안정해 내용이 잘리는
+     문제가 있었다. .report-picker-row에 width:max-content를 줘 항상
+     완전한 너비를 유지시키고, 바깥 패널의 max-width만 0→충분히 큰 값으로
+     전환해 그 완전한 내용을 옆에서부터 드러낸다.
+     버튼 자체를 기준으로(.report-picker-wrap) 왼쪽으로 열린다 - 아래로
+     내리지 않는다. 좁은 화면에서 이게 공정1~5 행과 겹치는 문제는
+     패널 위치가 아니라 헤더 자체를 위로 올려(body 상단 패딩 축소)
+     버튼이 항상 공정 행보다 확실히 위에 오도록 해결한다. */
+  .report-picker-wrap{ position:relative; }
+  /* top:0(버튼 상단에 맞춤, 세로 중앙정렬 X) + 아래 report-picker-row의
+     압축된 패딩 - 제목 바로 아래 공정1~5 버튼 행까지의 좁은 간격 안에서도
+     펼쳐진 패널이 그 행을 침범하지 않도록 높이를 낮췄다. */
+  .report-picker-panel{
+    position:absolute; top:-2px; right:calc(100% + 8px);
+    z-index:45; overflow:hidden; max-width:0; opacity:0; pointer-events:none;
+    transition:max-width .3s cubic-bezier(.4,0,.2,1), opacity .18s ease;
   }
+  .report-picker-panel.open{ max-width:560px; opacity:1; pointer-events:auto; }
+  /* box-shadow를 일부러 쓰지 않는다 - .report-picker-panel의 overflow:hidden
+     경계에 부드럽게 번지지 못하고 그림자가 뭉텅 잘려 모서리에 회색
+     자국처럼 보이는 문제가 있었다. 테두리 + 배경만으로 깔끔한 둥근
+     사각형을 유지한다. */
+  .report-picker-row{
+    display:flex; gap:6px; padding:4px; white-space:nowrap; width:max-content;
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+  }
+  /* 평상시엔 다른 ghost 버튼과 똑같은 흰 배경 - "마지막으로 고른 기간"을
+     계속 파랗게 남겨두지 않는다(더 이상 .active 클래스를 쓰지 않음).
+     :active(눌려있는 그 순간)에만 잠깐 파랗게 눌림 효과를 준다. */
+  .report-picker-btn{
+    font-family:var(--sans); font-size:12.5px; font-weight:600; cursor:pointer;
+    padding:6px 12px; border-radius:8px; border:1px solid var(--line);
+    background:var(--surface); color:var(--ink);
+  }
+  .report-picker-btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .report-picker-btn:active{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+
+  /* 공정1~5 버튼: 기준서 §2.1 주요구성(소입로-솔트조-솔트컨베이어-세정기-
+     건조로) 다섯 단계를 제목 바로 아래에 노출해, 지금 보고 있는 화면이
+     전체 라인 중 몇 번째 공정인지 항상 드러나게 한다. 버튼을 누르면
+     해당 공정과 무관한 탭 그룹은 화면에서 숨겨 공정별 독립 화면처럼
+     동작한다(자세한 동작은 applyProcessFilter 참고). */
+  .process-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  .process-btn{
+    position:relative; font-family:var(--sans); font-size:12.5px; font-weight:600; cursor:pointer;
+    padding:8px 14px; border-radius:999px; border:1.5px solid var(--line);
+    background:var(--surface); color:var(--ink-muted);
+    transition:background-color .15s ease, border-color .15s ease, color .15s ease;
+  }
+  .process-btn .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:16px; height:16px; border-radius:50%; margin-right:6px;
+    background:var(--surface-2); color:var(--ink-muted); font-size:10px; font-weight:700;
+  }
+  .process-btn.active{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .process-btn.active .num{ background:rgba(255,255,255,.28); color:var(--accent-ink); }
+  /* 제목 바로 아래 공정1~5 버튼도 자기 채널에 룰이 발생하면 점(뱃지)이
+     깜빡인다 - 룰 강제 발생은 "어느 채널인지 미리 알 수 없게" 무작위로
+     고르지만, 일단 발생한 뒤에는 여기서 바로 어느 공정인지 짚어줘야
+     사용자가 화면을 하나하나 열어보지 않고도 바로 찾아갈 수 있다. */
+  .process-btn.alarm .dot-badge{ display:block; animation: blink .9s ease-in-out infinite; }
+
+  /* 헤더 우측: 1행 보고서출력·수정(폭 고정 버튼만) → 2행 정상/이상감지
+     표시(길어지면 이 줄 안에서만 줄바꿈) → 3행 내폭/외폭 바로가기.
+     공정 화면을 전환해도 항상 같은 자리에서 두 핵심 결과값에 곧장
+     접근할 수 있게 한다. */
+  .hdr-right{ display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  .hdr-shortcuts{ display:flex; align-items:center; gap:8px; }
+  .hdr-shortcuts-label{ font-size:10.5px; font-weight:600; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.04em; }
+  .shortcut-btn{
+    position:relative; display:inline-flex; align-items:center; gap:6px;
+    font-family:var(--sans); font-size:12.5px; font-weight:700; cursor:pointer;
+    padding:7px 13px; border-radius:999px; border:1.5px solid var(--accent);
+    background:var(--surface); color:var(--accent);
+  }
+  .shortcut-btn.active{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+  .shortcut-btn.alarm .dot-badge{ display:block; animation: blink .9s ease-in-out infinite; }
+
+  /* 제목(공정 인과 관리도) 오른쪽에 나란히 놓이는 배지. 글자 크기를
+     제목과 맞춰 존재감을 키웠다. 채널 이름이 길고(예: 솔트컨베이어) 룰이
+     여러 개 겹치면 문구가 길어지는데, 이땐 오른쪽으로 늘어나다가(제목
+     줄의 남는 공간을 채우다가) 정말 자리가 없으면 title-row 안에서만
+     줄바꿈된다 - hdr-right(보고서출력/수정 버튼)를 밀어내리지 않는다. */
+  .pill{
+    display:inline-flex; align-items:flex-start; gap:8px;
+    min-height:30px; box-sizing:border-box;
+    padding:6px 16px; border-radius:999px; font-size:14px; font-weight:700;
+    background:var(--ok-bg); color:var(--ok);
+    max-width:560px; white-space:normal; text-align:left; line-height:1.3;
+  }
+  .pill .dot{ margin-top:4px; flex:none; }
   .pill.crit{ background:var(--crit-bg); color:var(--crit); }
-  .pill .dot{ width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .pill .dot{ width:8px; height:8px; border-radius:50%; background:currentColor; }
   .pill.crit .dot{ animation: blink 1s ease-in-out infinite; }
   @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
 
@@ -113,14 +212,14 @@
   }
 
   /* ---- channel tabs ---- */
-  .tabs-card{ display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:14px 16px; }
-  .tab-group{ display:flex; flex-direction:column; gap:6px; }
+  .tabs-card{ display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:8px 16px; }
+  .tab-group{ display:flex; flex-direction:column; gap:4px; }
   .tab-group-label{ font-size:10.5px; font-weight:600; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.06em; }
   .tab-row{ display:flex; gap:6px; }
   .tab-btn{
     position:relative; display:inline-flex; align-items:center; gap:6px;
     font-family:var(--sans); font-size:12.5px; font-weight:600; cursor:pointer;
-    padding:8px 13px; border-radius:10px; border:1px solid var(--line);
+    padding:6px 13px; border-radius:10px; border:1px solid var(--line);
     background:var(--surface-2); color:var(--ink-muted);
   }
   .tab-btn.active{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
@@ -260,6 +359,59 @@
   .inject-card{ display:flex; flex-direction:column; gap:9px; }
   .inject-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; }
   .inject-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; flex:1 1 auto; }
+
+  .rule-inject-card{ display:flex; flex-direction:column; gap:10px; }
+  .rule-inject-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; }
+  .rule-inject-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
+  .rule-inject-row{ display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; }
+  @media (max-width: 860px){ .rule-inject-row{ grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 560px){ .rule-inject-row{ grid-template-columns: repeat(2, 1fr); } }
+  .rule-inject-row .btn.inject{ width:auto; }
+  .rule-inject-status{ min-height:16px; font-weight:600; color:var(--ink-muted); }
+
+  /* 기간별 보고서: 일간/주간/월간/연간 탭을 누르면 그 기간만큼(압축 기준
+     15틱=1시간) 더미 시뮬레이션을 즉시 앞당겨 돌려서 요약을 보여준다.
+     현재 진행 중인 실시간 시뮬레이션 상태와는 완전히 독립적이다. */
+  .report-card{ display:flex; flex-direction:column; gap:12px; }
+  .report-head{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  .report-head h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; }
+  .report-hint{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
+  .report-kpi-row{ display:grid; grid-template-columns: repeat(4, 1fr); gap:14px; }
+  @media (max-width: 720px){ .report-kpi-row{ grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 420px){ .report-kpi-row{ grid-template-columns: 1fr; } }
+  /* KPI 4칸 바로 아래에 넣는 채널별 판정 건수 막대그래프 - 테이블과 같은
+     정보를 한눈에 비교할 수 있게 Rule1~5를 채널별로 누적 막대로 쌓는다. */
+  .report-chart-wrap{ display:flex; flex-direction:column; gap:8px; }
+  .report-chart-head{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+  .report-chart-title{ font-size:12px; font-weight:600; color:var(--ink-muted); }
+  .report-chart-legend{ display:flex; flex-wrap:wrap; gap:10px; font-size:10.5px; color:var(--ink-muted); }
+  .report-chart-legend span{ display:inline-flex; align-items:center; gap:4px; }
+  .report-chart-legend i{ width:8px; height:8px; border-radius:2px; display:inline-block; background:currentColor; }
+  #reportChart{ width:100%; height:185px; display:block; border-radius:10px; background:var(--surface-2); }
+  .report-table-wrap{ overflow-x:auto; }
+  .report-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .report-table th, .report-table td{ padding:8px 10px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .report-table th:first-child, .report-table td:first-child{ text-align:left; }
+  .report-table thead th{ font-size:11px; color:var(--ink-muted); font-weight:600; background:var(--surface-2); }
+  .report-table tbody tr:last-child td{ border-bottom:none; }
+  .report-status{ min-height:16px; font-size:12px; color:var(--ink-muted); }
+
+  /* 공정별 열화 주입(수동): 위 "판정 룰 강제 발생"과 달리 대상 공정을
+     미리 알고 사용자가 직접 골라서 켜는 기능. 화면 맨 아래, 5개 공정
+     버튼과 같은 순서로 나열하고, 오른쪽 끝에 내폭/외폭 전용 버튼 2개를
+     같은 줄에 이어 붙인다(총 7개) - 기존 5개 버튼 폭을 좁혀 한 줄에
+     들어가게 한다. */
+  .manual-inject-card{ display:flex; flex-direction:column; gap:10px; }
+  .manual-inject-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; }
+  .manual-inject-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
+  .manual-inject-row{ display:grid; grid-template-columns: repeat(7, 1fr); gap:8px; }
+  @media (max-width: 1000px){ .manual-inject-row{ grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 620px){ .manual-inject-row{ grid-template-columns: repeat(2, 1fr); } }
+  .manual-inject-row .btn.inject{ width:auto; padding:9px 8px; font-size:12px; }
+  /* 내폭/외폭 버튼(6·7번째)은 공정 5개와 시각적으로 구분되게 왼쪽에 얇은
+     구분선을 둔다 - 좁은 화면에서 줄바꿈되면 구분선은 의미가 없어져 뺀다. */
+  .manual-inject-row .btn.inject:nth-child(6){ border-left:2px solid rgba(255,255,255,.55); }
+  @media (max-width: 1000px){ .manual-inject-row .btn.inject:nth-child(6){ border-left:none; } }
 
   .stats-card{ padding:14px 14px 14px; }
   .stats-bar{ display:grid; grid-template-columns: repeat(4, 1fr); gap:14px; }
@@ -421,35 +573,82 @@
 
   <div class="hdr">
     <div>
-      <h1>공정 인과 관리도</h1>
+      <div class="title-row">
+        <h1>공정 인과 관리도</h1>
+        <div id="statusPill" class="pill"><span class="dot"></span><span id="statusText">정상</span></div>
+      </div>
+      <div class="process-row" id="processRow">
+        <button class="process-btn" type="button" data-process="p1"><span class="num">1</span>소입로<span class="dot-badge"></span></button>
+        <button class="process-btn" type="button" data-process="p2"><span class="num">2</span>솔트조<span class="dot-badge"></span></button>
+        <button class="process-btn" type="button" data-process="p3"><span class="num">3</span>솔트컨베이어<span class="dot-badge"></span></button>
+        <button class="process-btn" type="button" data-process="p4"><span class="num">4</span>세정기<span class="dot-badge"></span></button>
+        <button class="process-btn" type="button" data-process="p5"><span class="num">5</span>건조로<span class="dot-badge"></span></button>
+      </div>
     </div>
-    <div class="hdr-actions">
-      <button id="editOcapBtn" class="btn ghost" type="button" title="표출되는 내용 수정">✏️ 수정</button>
-      <div id="statusPill" class="pill"><span class="dot"></span><span id="statusText">정상</span></div>
+    <div class="hdr-right">
+      <div class="hdr-actions">
+        <div class="report-picker-wrap" id="reportPickerWrap">
+          <button id="reportOutputBtn" class="btn ghost" type="button" title="기간별 보고서 출력" aria-haspopup="true" aria-expanded="false">📊 보고서 출력</button>
+          <div class="report-picker-panel" id="reportPickerPanel">
+            <div class="report-picker-row">
+              <button class="report-picker-btn" type="button" data-period="daily">일간</button>
+              <button class="report-picker-btn" type="button" data-period="weekly">주간</button>
+              <button class="report-picker-btn" type="button" data-period="monthly">월간</button>
+              <button class="report-picker-btn" type="button" data-period="yearly">연간</button>
+            </div>
+          </div>
+        </div>
+        <button id="editOcapBtn" class="btn ghost" type="button" title="표출되는 내용 수정">✏️ 수정</button>
+      </div>
+      <div class="hdr-shortcuts" id="hdrShortcuts">
+        <span class="hdr-shortcuts-label">핵심 산출물</span>
+        <button class="shortcut-btn" type="button" data-ch="chi">📏 내폭<span class="dot-badge"></span></button>
+        <button class="shortcut-btn" type="button" data-ch="oe">📐 외폭<span class="dot-badge"></span></button>
+      </div>
     </div>
   </div>
 
   <div class="card tabs-card">
     <div class="tab-group">
-      <span class="tab-group-label">내폭 계열 (원인→결과)</span>
+      <span class="tab-group-label">공정3 · 솔트컨베이어</span>
       <div class="tab-row">
         <button class="tab-btn active" type="button" data-ch="conveyor">🌡️ 솔트컨베이어 존 온도<span class="dot-badge"></span></button>
-        <button class="tab-btn" type="button" data-ch="chi">📏 내폭<span class="dot-badge"></span></button>
       </div>
     </div>
     <div class="tab-divider"></div>
     <div class="tab-group">
-      <span class="tab-group-label">외폭 계열 (원인→결과)</span>
+      <span class="tab-group-label">공정2 · 솔트조</span>
       <div class="tab-row">
         <button class="tab-btn" type="button" data-ch="salt">🌡️ 솔트조 온도<span class="dot-badge"></span></button>
-        <button class="tab-btn" type="button" data-ch="oe">📐 외폭<span class="dot-badge"></span></button>
       </div>
     </div>
     <div class="tab-divider"></div>
     <div class="tab-group">
-      <span class="tab-group-label">독립 모니터링 (배경 공정변수 · 인과관계 없음)</span>
+      <span class="tab-group-label">공정1 · 소입로</span>
+      <div class="tab-row">
+        <button class="tab-btn" type="button" data-ch="hardening">🔥 소입로 존 온도<span class="dot-badge"></span></button>
+      </div>
+    </div>
+    <div class="tab-divider"></div>
+    <div class="tab-group">
+      <span class="tab-group-label">공정4 · 세정기</span>
+      <div class="tab-row">
+        <button class="tab-btn" type="button" data-ch="wash">🧼 세정 온도<span class="dot-badge"></span></button>
+      </div>
+    </div>
+    <div class="tab-divider"></div>
+    <div class="tab-group">
+      <span class="tab-group-label">공정5 · 건조로</span>
       <div class="tab-row">
         <button class="tab-btn" type="button" data-ch="belt">〰️ 건조로 메시벨트속도<span class="dot-badge"></span></button>
+      </div>
+    </div>
+    <div class="tab-divider"></div>
+    <div class="tab-group">
+      <span class="tab-group-label">핵심 산출물 (내폭·외폭 · 공정 구분과 무관 · 별도 관리)</span>
+      <div class="tab-row">
+        <button class="tab-btn" type="button" data-ch="chi">📏 내폭<span class="dot-badge"></span></button>
+        <button class="tab-btn" type="button" data-ch="oe">📐 외폭<span class="dot-badge"></span></button>
       </div>
     </div>
     <div class="spacer"></div>
@@ -496,23 +695,30 @@
     </div>
   </div>
 
-  <div class="grid3">
-    <div class="card inject-card">
-      <h2>🌡️ → 📏 솔트컨베이어 열화 주입</h2>
-      <p>솔트컨베이어 존 온도 평균을 서서히 이동시켜 내폭에 그대로 전파되는 모습을 봅니다 (β=0.00026829mm/℃, R²=0.35).</p>
-      <button id="injectChiBtn" class="btn inject" type="button">솔트컨베이어 열화 주입 시작</button>
+  <div class="card rule-inject-card">
+    <h2>⚡ 판정 룰 강제 발생</h2>
+    <p>버튼을 누르면 7개 채널(공정1~5 + 내폭·외폭) 중 무작위로 하나가 골라져 그 룰이 발생합니다. 발생한 공정은 위 공정 버튼의 점(뱃지)으로 바로 표시됩니다.</p>
+    <div class="rule-inject-row">
+      <button class="btn inject rule-inject-btn" type="button" data-rule="Rule1">Rule1 발생</button>
+      <button class="btn inject rule-inject-btn" type="button" data-rule="Rule2">Rule2 발생</button>
+      <button class="btn inject rule-inject-btn" type="button" data-rule="Rule3">Rule3 발생</button>
+      <button class="btn inject rule-inject-btn" type="button" data-rule="Rule4">Rule4 발생</button>
+      <button class="btn inject rule-inject-btn" type="button" data-rule="Rule5">Rule5 발생</button>
     </div>
+    <p class="rule-inject-status" id="ruleInjectStatus"></p>
+  </div>
 
-    <div class="card inject-card">
-      <h2>🌡️ → 📐 솔트조 열화 주입</h2>
-      <p>솔트조 온도 평균을 서서히 이동시켜 외폭에 전파되는 모습을 봅니다 (β=0.00192224mm/℃, R²=0.15).</p>
-      <button id="injectSaltBtn" class="btn inject" type="button">솔트조 열화 주입 시작</button>
-    </div>
-
-    <div class="card inject-card">
-      <h2>〰️ 벨트속도 열화 주입</h2>
-      <p>건조로 메시벨트속도 자체에만 이상을 주입합니다 — 내폭·외폭과는 실측으로도 무관(r≈-0.0016)하여 다른 채널에 전파되지 않습니다.</p>
-      <button id="injectBeltBtn" class="btn inject" type="button">벨트속도 열화 주입 시작</button>
+  <div class="card manual-inject-card">
+    <h2>🔧 공정별 열화 주입 (수동)</h2>
+    <p>위 "판정 룰 강제 발생"과 달리, 원하는 공정을 직접 골라 그 채널에 열화를 주입합니다. 인과관계로 연결된 공정(솔트조→외폭, 솔트컨베이어→내폭)은 그 영향이 결과 채널로 그대로 전파되는 것도 함께 볼 수 있습니다.</p>
+    <div class="manual-inject-row">
+      <button class="btn inject manual-inject-btn" type="button" data-ch="hardening">1 소입로</button>
+      <button class="btn inject manual-inject-btn" type="button" data-ch="salt">2 솔트조</button>
+      <button class="btn inject manual-inject-btn" type="button" data-ch="conveyor">3 솔트컨베이어</button>
+      <button class="btn inject manual-inject-btn" type="button" data-ch="wash">4 세정기</button>
+      <button class="btn inject manual-inject-btn" type="button" data-ch="belt">5 건조로</button>
+      <button class="btn inject manual-inject-btn" type="button" data-ch="chi">📏 내폭</button>
+      <button class="btn inject manual-inject-btn" type="button" data-ch="oe">📐 외폭</button>
     </div>
   </div>
 
@@ -569,6 +775,44 @@
   </div>
 </div>
 
+<!-- 기간별 보고서 모달: 헤더의 "보고서 출력" → 일간/주간/월간/연간 중 하나를
+     고르면 이 중앙 모달이 뜨며 배경이 블러 처리된다(수정 모달과 동일한
+     패턴). 배경(오버레이) 클릭으로도 닫힌다. -->
+<div class="modal-overlay" id="reportModalOverlay">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle">
+    <div class="modal-head">
+      <h2 id="reportModalTitle">📊 기간별 보고서 · <span id="reportModalPeriodLabel">일간</span></h2>
+      <button id="reportModalCloseBtn" class="ocap-close" type="button" aria-label="닫기">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="report-hint">더미 데이터로 그 기간(15틱=1시간 압축 기준)만큼 즉시 시뮬레이션을 앞당겨 요약을 보여줍니다 - 위에서 진행 중인 실시간 시뮬레이션과는 별개입니다.</p>
+      <div class="report-kpi-row">
+        <div class="stat"><span class="k">총 판정 건수</span><span class="v" id="reportTotalViol">—</span></div>
+        <div class="stat"><span class="k">정상 비율(채널 평균)</span><span class="v" id="reportNormalRatio">—</span></div>
+        <div class="stat"><span class="k">평균 Cpk(내폭·외폭)</span><span class="v" id="reportAvgCpk">—</span></div>
+        <div class="stat"><span class="k">평균 σ 이탈(전체)</span><span class="v" id="reportAvgSigma">—</span></div>
+      </div>
+      <div class="report-chart-wrap">
+        <div class="report-chart-head">
+          <span class="report-chart-title">채널별 판정 건수(Rule1~5)</span>
+          <div class="report-chart-legend" id="reportChartLegend"></div>
+        </div>
+        <canvas id="reportChart"></canvas>
+      </div>
+      <div class="report-table-wrap">
+        <table class="report-table" id="reportTable">
+          <thead>
+            <tr><th>채널</th><th>Rule1</th><th>Rule2</th><th>Rule3</th><th>Rule4</th><th>Rule5</th><th>Cpk</th><th>평균 σ이탈</th></tr>
+          </thead>
+          <tbody id="reportTableBody"></tbody>
+        </table>
+      </div>
+      <p class="report-hint">Cpk는 내폭·외폭만 설계 규격(USL/LSL) 기준의 실제 공정능력지수입니다 · 나머지 5개 채널(공정1~5 고유 변수)은 기준서상 별도 규격이 없는 공정변수라 관리한계(CL±3σ)를 대신 쓴 참고값(회색 표시)이며, 위 "평균 Cpk(내폭·외폭)"·색상 판정에는 포함되지 않습니다.</p>
+      <p class="report-status" id="reportStatus"></p>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -577,22 +821,43 @@
   var CHUNK_SIZE = 15;
   var MAX_RAW = 160, MAX_CHUNK = 60;
   var TICK_MS = 1000;
-  var INJECT_TICKS = 55, INJECT_RAMP = 22, INJECT_NOISE_MULT = 2.6;
 
   var CHANNEL_DEFS = {
+    hardening:{ label:"소입로 존 온도", icon:"🔥", unit:"℃", decimals:1, role:"cause", mu:858.0, sigma:3.4, pair:"hardening" },
     conveyor: { label:"솔트컨베이어 존 온도", icon:"🌡️", unit:"℃", decimals:2, role:"cause", mu:283.8462, sigma:7.1312, pair:"chi" },
     chi:      { label:"내폭", icon:"📏", unit:"mm", decimals:4, role:"effect", mu:25.000, beta:0.00026829, noiseSigma:0.002606, causeId:"conveyor", pair:"chi", usl:25.013, lsl:24.987 },
     salt:     { label:"솔트조 온도", icon:"🌡️", unit:"℃", decimals:2, role:"cause", mu:331.8082, sigma:0.5921, pair:"oe" },
     oe:       { label:"외폭", icon:"📐", unit:"mm", decimals:4, role:"effect", mu:30.000, beta:0.00192224, noiseSigma:0.0027097, causeId:"salt", pair:"oe", usl:30.013, lsl:29.987 },
+    wash:     { label:"세정 온도", icon:"🧼", unit:"℃", decimals:1, role:"cause", mu:55.0, sigma:1.8, pair:"wash" },
     belt:     { label:"건조로 메시벨트속도", icon:"〰️", unit:"m/s", decimals:4, role:"cause", mu:1.197842, sigma:0.014846, pair:"belt" }
   };
-  var CHANNEL_IDS = ["conveyor", "chi", "salt", "oe", "belt"];
-  var INJECT_BTN_ID = { chi: "injectChiBtn", oe: "injectSaltBtn", belt: "injectBeltBtn" };
-  function injectLabel(pairId){
-    if (pairId === "chi") return "솔트컨베이어 열화 주입 시작";
-    if (pairId === "oe") return "솔트조 열화 주입 시작";
-    return "벨트속도 열화 주입 시작";
+  var CHANNEL_IDS = ["hardening", "conveyor", "chi", "salt", "oe", "wash", "belt"];
+  // 소입로/세정기는 실측 데이터가 없어 임시로 합성한 자리표시 파라미터입니다.
+  // 기준서 §2.1 "약 860℃ 오스테나이트화"를 참고해 소입로는 858±3.4℃로, 세정기는
+  // 임의로 55±1.8℃로 가정했습니다 - 실제 설비 데이터 확보 시 확정 파라미터로 교체 필요.
+  // 공정 버튼(공정1~5) ↔ 채널 매핑. 기준서 §2.1 주요구성 5단계 순서를 그대로
+  // 따르며, 각 공정에는 그 공정 "자체"의 실측 변수만 매핑한다(내폭/외폭은
+  // 인과관계상 솔트조/솔트컨베이어와 엮여 있지만, 공정 화면에는 인과관계와
+  // 무관하게 그 공정 고유 변수만 나오도록 의도적으로 제외했다 - 아래
+  // OUTPUT_CHANNELS 참고).
+  var PROCESS_DEFS = [
+    { id: "p1", label: "공정1 · 소입로", channels: ["hardening"] },
+    { id: "p2", label: "공정2 · 솔트조", channels: ["salt"] },
+    { id: "p3", label: "공정3 · 솔트컨베이어", channels: ["conveyor"] },
+    { id: "p4", label: "공정4 · 세정기", channels: ["wash"] },
+    { id: "p5", label: "공정5 · 건조로", channels: ["belt"] }
+  ];
+  function processForChannel(chId){
+    for (var i = 0; i < PROCESS_DEFS.length; i++){
+      if (PROCESS_DEFS[i].channels.indexOf(chId) !== -1) return PROCESS_DEFS[i].id;
+    }
+    return null;
   }
+  // 내폭/외폭(chi/oe) = 핵심 산출물. 공정별 원인변수와 인과관계로 연결되어
+  // 있긴 하지만, 어느 공정 화면에도 속하지 않는 완전히 별도의 그룹으로
+  // 관리한다 - 공정 버튼(1~5)을 눌렀을 때는 항상 숨겨지고, 오직 헤더의
+  // 내폭/외폭 바로가기 버튼을 통해서만 진입한다.
+  var OUTPUT_CHANNELS = ["chi", "oe"];
 
   CHANNEL_IDS.forEach(function(id){
     var c = CHANNEL_DEFS[id];
@@ -617,11 +882,88 @@
     log: []
   };
 
-  var inject = {
-    chi:  { active: false, t: 0 },
-    oe:   { active: false, t: 0 },
-    belt: { active: false, t: 0 }
+  // ---------- 판정 룰 강제 발생(무작위 채널) ----------
+  // 기존 "특정 공정에 서서히 평균이동을 주입" 방식을 완전히 대체한다. 이제는
+  // 사용자가 룰(1~5) 자체를 지정하면, 7개 채널(공정1~5의 고유 변수 + 내폭·
+  // 외폭) 중 하나가 무작위로 골라져 그 채널의 원시값(raw)이 해당 룰의 판정
+  // 조건을 정확히 만족하는 값 시퀀스로 강제 대체된다. 대상 채널을 미리
+  // 알려주지는 않지만, 룰이 실제로 발생하면 그 채널이 속한 공정 버튼의
+  // 알람 점(뱃지)이 즉시 켜져 어디서 발생했는지 바로 알 수 있다(render()의
+  // CHANNEL_IDS.forEach 알람 동기화 참고) - "무작위지만 발생 즉시 위치는
+  // 알 수 있는" 훈련용 설계.
+  var ruleInject = { active: false, chId: null, rule: null, queue: [] };
+
+  // 룰별로 정확히 그 룰만 트리거되도록 설계된 원시값 시퀀스를 만든다. 부호는
+  // 주입마다 한 번만 무작위로 정해 그 채널의 실측 mu/rawSigma를 기준으로 만든다.
+  // 각 룰의 배율은 판정식(ruleCheck)의 임계값을 확실히 넘기면서, 더 낮은
+  // 번호의 룰(예: Rule4용 0.6σ가 Rule3의 1σ 임계값)까지 함께 튀지 않도록
+  // 여유를 두고 선택했다.
+  function buildInjectionQueue(rule, def){
+    var mu = def.mu, sigma = def.rawSigma;
+    var sign = Math.random() < 0.5 ? -1 : 1;
+    function v(mult){ return mu + sign * mult * sigma; }
+    var queue = [];
+    if (rule === "Rule1"){
+      queue.push(v(3.6));
+    } else if (rule === "Rule2"){
+      for (var i = 0; i < 3; i++) queue.push(v(2.6));
+    } else if (rule === "Rule3"){
+      for (var i = 0; i < 5; i++) queue.push(v(1.3));
+    } else if (rule === "Rule4"){
+      for (var i = 0; i < 9; i++) queue.push(v(0.6));
+    } else if (rule === "Rule5"){
+      for (var i = 0; i < 15; i++){
+        var jitter = Math.random() - 0.5; // -0.5σ ~ +0.5σ, 항상 |v-mu|<σ 유지
+        queue.push(mu + jitter * sigma);
+      }
+    }
+    return queue;
+  }
+
+  // 현재 진행 중인 룰 주입이 이 채널을 대상으로 하면 큐에서 다음 강제값을
+  // 꺼내 쓰고, 아니면 자연값을 그대로 반환한다.
+  function overrideOrNatural(chId, naturalVal){
+    if (ruleInject.active && ruleInject.chId === chId && ruleInject.queue.length){
+      return ruleInject.queue.shift();
+    }
+    return naturalVal;
+  }
+
+  function setRuleInjectButtonsDisabled(disabled){
+    document.querySelectorAll(".rule-inject-btn").forEach(function(btn){ btn.disabled = disabled; });
+  }
+
+  // ---------- 공정별 열화 주입(수동) ----------
+  // 위 판정 룰 강제 발생과는 완전히 별개의 기능이다 - 대상 채널을 무작위로
+  // 숨기는 대신, 사용자가 직접 원하는 공정을 골라 그 채널의 평균을 서서히
+  // 이동시킨다. 공정1~5 각각의 고유 채널(=PROCESS_DEFS의 channels[0])과
+  // 핵심 산출물(내폭·외폭) 자신까지 총 7개 채널 각각이 독립적인 상태를
+  // 가지므로 여러 개를 동시에 켤 수도 있다. 인과관계로 연결된 공정
+  // (솔트조→외폭, 솔트컨베이어→내폭)은 updatePair()가 causeNatural(주입으로
+  // 이동된 자연값)을 그대로 인과식에 사용하므로, 그 영향이 결과 채널에
+  // 실제로 전파되는 모습까지 함께 보인다 - 이 점이 판정 룰 강제 발생(전파
+  // 차단)과의 핵심 차이다. 내폭/외폭 자신에 대한 주입은 그와 별개로,
+  // updatePair()에서 causeVal과 무관하게 effectNatural에 직접 shift를
+  // 더해 "결과물 자체의 이상"을 시연한다(원인 채널로 역전파되지 않음).
+  var MANUAL_INJECT_TICKS = 55, MANUAL_INJECT_RAMP = 22, MANUAL_INJECT_NOISE_MULT = 2.6;
+  var MANUAL_INJECT_CHANNELS = ["hardening", "salt", "conveyor", "wash", "belt", "chi", "oe"];
+  var MANUAL_INJECT_LABEL = {
+    hardening: "1 소입로",
+    salt: "2 솔트조",
+    conveyor: "3 솔트컨베이어",
+    wash: "4 세정기",
+    belt: "5 건조로",
+    chi: "📏 내폭",
+    oe: "📐 외폭"
   };
+  var manualInject = {};
+  MANUAL_INJECT_CHANNELS.forEach(function(id){ manualInject[id] = { active: false, t: 0 }; });
+
+  function manualRampFracFor(chId){
+    var inj = manualInject[chId];
+    if (!inj || !inj.active) return 0;
+    return Math.min(1, inj.t / MANUAL_INJECT_RAMP);
+  }
 
   var chState = {};
   CHANNEL_IDS.forEach(function(id){
@@ -719,6 +1061,339 @@
       if (allNear) triggered.push("Rule5");
     }
     return triggered;
+  }
+
+  // ---------- 기간별 보고서 (일간/주간/월간/연간) ----------
+  // 현재 시뮬레이션은 1틱≈1초, CHUNK_SIZE(15틱)=1시간(압축)으로 동작한다.
+  // 실제 하루~1년치를 실시간으로 쌓으려면 각각 6분~36시간이 걸리므로, 이
+  // 보고서는 그만큼의 틱을 화면에 그리지 않고 그 자리에서 즉시 빠르게
+  // "재생"해 더미 통계를 만든다. 진행 중인 실시간 시뮬레이션(state/chState)
+  // 과는 완전히 분리된 별도의 임시 버퍼만 사용하므로, 보고서를 몇 번을
+  // 돌려도 화면에 보이는 실시간 관리도에는 전혀 영향을 주지 않는다.
+  var REPORT_PERIOD_TICKS = {
+    daily: 24 * CHUNK_SIZE,
+    weekly: 7 * 24 * CHUNK_SIZE,
+    monthly: 30 * 24 * CHUNK_SIZE,
+    yearly: 365 * 24 * CHUNK_SIZE
+  };
+  var REPORT_PERIOD_LABEL = { daily: "일간", weekly: "주간", monthly: "월간", yearly: "연간" };
+
+  // 보고서 전용 난수 생성기 - 실시간 시뮬레이션이 쓰는 공용 Math.random()
+  // 스트림을 전혀 건드리지 않는다. 연간 보고서 한 번에 수십만 번씩 난수를
+  // 뽑다 보면(같은 스트림을 공유할 경우) 그 이후 실시간 틱이 뽑는 난수값이
+  // 달라져 버려 "보고서를 열어봤는지 여부"에 따라 실시간 관리도의 결과가
+  // 미묘하게 달라지는 부작용이 생긴다 - 완전히 별개여야 한다는 원칙에 어긋남.
+  var reportSeedCounter = 1;
+  function makeSeededRng(seed){
+    var a = seed >>> 0;
+    return function(){
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function seededRandn(rng){
+    var u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function computeReportStats(numTicks){
+    // Date.now()와 매 호출마다 증가하는 카운터를 섞어 시드를 만든다 -
+    // Math.random()을 전혀 호출하지 않으므로 실시간 시뮬레이션의 난수
+    // 스트림과 완전히 독립적이면서도, 매번 다른(=매번 "다시 돌려본" 느낌의)
+    // 더미 결과가 나온다.
+    var rng = makeSeededRng((Date.now() ^ (reportSeedCounter++ * 2654435761)) >>> 0);
+    function rn(){ return seededRandn(rng); }
+
+    var perCh = {};
+    CHANNEL_IDS.forEach(function(id){
+      perCh[id] = {
+        rawBuf: [], chunkBuf: [],
+        rawPrevTrig: [], chunkPrevTrig: [],
+        violCounts: { Rule1: 0, Rule2: 0, Rule3: 0, Rule4: 0, Rule5: 0 },
+        cpkSum: 0, cpkCount: 0, specCpkSum: 0, specCpkCount: 0,
+        sigmaAbsSum: 0, sigmaAbsCount: 0,
+        alarmTicks: 0
+      };
+    });
+
+    function pushRawFF(id, val){
+      var def = CHANNEL_DEFS[id];
+      var s = perCh[id];
+      s.rawBuf.push(val);
+      if (s.rawBuf.length > 15) s.rawBuf.shift();
+      var trig = ruleCheck(s.rawBuf, def.rawSigma, def.mu);
+      trig.forEach(function(r){
+        if (s.rawPrevTrig.indexOf(r) === -1) s.violCounts[r]++;
+      });
+      s.rawPrevTrig = trig;
+      s.sigmaAbsSum += Math.abs(val - def.mu) / def.rawSigma;
+      s.sigmaAbsCount++;
+      if (trig.length > 0) s.alarmTicks++;
+    }
+
+    function updateChunkFF(id, tickNum){
+      if (tickNum % CHUNK_SIZE !== 0) return;
+      var def = CHANNEL_DEFS[id];
+      var s = perCh[id];
+      var recent = s.rawBuf.slice(-CHUNK_SIZE);
+      if (recent.length === 0) return;
+      var chunkVal = recent.reduce(function(a, b){ return a + b; }, 0) / recent.length;
+      s.chunkBuf.push(chunkVal);
+      if (s.chunkBuf.length > 15) s.chunkBuf.shift();
+
+      // 내폭/외폭(chi/oe)만 설계 규격(usl/lsl)이 있는 진짜 Cpk 대상이다. 나머지
+      // 5개 채널(공정1~5 고유 변수)은 기준서상 규격이 없는 공정변수라 Cpk
+      // 개념 자체가 성립하지 않는데, 예전엔 라이브 단일채널 화면과 동일하게
+      // "관리한계(CL±3σ)를 규격 대용으로 쓴 참고값"을 이 보고서에도 그대로
+      // 합산해버려 - 서로 다른 두 종류의 "Cpk"가 평균에 섞이는 문제
+      // ("짬뽕")가 있었다. 관리한계 대용 Cpk는 정의상 참값이 1.0 근처라
+      // 15개 표본의 표집오차만으로도 종종 1 미만으로 떨어지는데, 이게
+      // 진짜 공정능력 저하처럼 보이는 이상점으로 나타났다. 이제 참고값은
+      // 행에 계속 표시하되(hasSpec:false로 표시만 회색 처리) "평균 Cpk"
+      // 집계·색상 판정에는 절대 합산하지 않는다.
+      var hasSpec = def.usl !== undefined && def.lsl !== undefined;
+      var cpkUsl = hasSpec ? def.usl : def.mu + 3 * def.rawSigma;
+      var cpkLsl = hasSpec ? def.lsl : def.mu - 3 * def.rawSigma;
+      var cpk = computeCpk(recent, cpkUsl, cpkLsl);
+      if (cpk !== null){
+        s.cpkSum += cpk; s.cpkCount++;
+        if (hasSpec){ s.specCpkSum += cpk; s.specCpkCount++; }
+      }
+
+      var trig = ruleCheck(s.chunkBuf, def.chunkSigma, def.mu);
+      trig.forEach(function(r){
+        if (s.chunkPrevTrig.indexOf(r) === -1) s.violCounts[r]++;
+      });
+      s.chunkPrevTrig = trig;
+    }
+
+    // 정상 가동 상황(주입 없음)의 자연 발생 통계를 보여준다 - 실시간 화면의
+    // 룰 강제 발생/수동 열화 주입과는 무관하게, 같은 mu/sigma·인과식
+    // 파라미터로 자연 난수만 생성한다.
+    for (var t = 1; t <= numTicks; t++){
+      pushRawFF("hardening", CHANNEL_DEFS.hardening.mu + CHANNEL_DEFS.hardening.sigma * rn());
+
+      var convDef = CHANNEL_DEFS.conveyor, chiDef = CHANNEL_DEFS.chi;
+      var convVal = convDef.mu + convDef.sigma * rn();
+      pushRawFF("conveyor", convVal);
+      pushRawFF("chi", chiDef.mu + chiDef.beta * (convVal - convDef.mu) + chiDef.noiseSigma * rn());
+
+      var saltDef = CHANNEL_DEFS.salt, oeDef = CHANNEL_DEFS.oe;
+      var saltVal = saltDef.mu + saltDef.sigma * rn();
+      pushRawFF("salt", saltVal);
+      pushRawFF("oe", oeDef.mu + oeDef.beta * (saltVal - saltDef.mu) + oeDef.noiseSigma * rn());
+
+      pushRawFF("wash", CHANNEL_DEFS.wash.mu + CHANNEL_DEFS.wash.sigma * rn());
+      pushRawFF("belt", CHANNEL_DEFS.belt.mu + CHANNEL_DEFS.belt.sigma * rn());
+
+      for (var ci = 0; ci < CHANNEL_IDS.length; ci++){ updateChunkFF(CHANNEL_IDS[ci], t); }
+    }
+
+    var totalViol = 0, totalAlarmTicks = 0;
+    var totalSpecCpkSum = 0, totalSpecCpkCount = 0;
+    var totalSigmaSum = 0, totalSigmaCount = 0;
+    var rows = CHANNEL_IDS.map(function(id){
+      var s = perCh[id];
+      var def = CHANNEL_DEFS[id];
+      var hasSpec = def.usl !== undefined && def.lsl !== undefined;
+      var rowTotal = RULE_ORDER.reduce(function(a, r){ return a + s.violCounts[r]; }, 0);
+      totalViol += rowTotal;
+      totalAlarmTicks += s.alarmTicks;
+      var avgCpk = s.cpkCount ? s.cpkSum / s.cpkCount : null;
+      var avgSigma = s.sigmaAbsCount ? s.sigmaAbsSum / s.sigmaAbsCount : 0;
+      if (hasSpec && s.specCpkCount){ totalSpecCpkSum += s.specCpkSum / s.specCpkCount; totalSpecCpkCount++; }
+      totalSigmaSum += avgSigma; totalSigmaCount++;
+      return {
+        id: id, label: def.icon + " " + def.label,
+        counts: s.violCounts, total: rowTotal,
+        avgCpk: avgCpk, hasSpec: hasSpec, avgSigma: avgSigma
+      };
+    });
+
+    return {
+      numTicks: numTicks,
+      rows: rows,
+      totalViol: totalViol,
+      normalRatio: 1 - (totalAlarmTicks / (numTicks * CHANNEL_IDS.length)),
+      avgCpk: totalSpecCpkCount ? totalSpecCpkSum / totalSpecCpkCount : null,
+      avgSigma: totalSigmaCount ? totalSigmaSum / totalSigmaCount : 0
+    };
+  }
+
+  function reportCpkColor(cpk){
+    if (cpk === null || cpk === undefined) return "var(--ink-muted)";
+    if (cpk >= 1.33) return "var(--ok)";
+    if (cpk >= 1.0) return "#EEB84D";
+    return "var(--crit)";
+  }
+
+  // ---------- KPI 4칸 바로 아래에 넣는 채널별 판정 건수 누적 막대그래프 ----------
+  var lastReportRows = null;
+  function resizeReportCanvas(){
+    var canvas = document.getElementById("reportChart");
+    if (!canvas) return null;
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    var rctx = canvas.getContext("2d");
+    rctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: rctx, w: rect.width, h: rect.height };
+  }
+  function drawReportChart(rows){
+    if (rows) lastReportRows = rows;
+    rows = rows || lastReportRows;
+    var setup = resizeReportCanvas();
+    if (!setup || !rows || !rows.length) return;
+    var rctx = setup.ctx, w = setup.w, h = setup.h;
+    rctx.clearRect(0, 0, w, h);
+
+    var mutedColor = css("--ink-muted");
+    var maxVal = 1;
+    rows.forEach(function(r){
+      RULE_ORDER.forEach(function(rule){
+        var cnt = r.counts[rule] || 0;
+        if (cnt > maxVal) maxVal = cnt;
+      });
+    });
+
+    var padL = 32, padR = 10, padT = 10, padB = 36;
+    var plotW = w - padL - padR, plotH = h - padT - padB;
+    var n = rows.length;
+    function xPos(i){ return n <= 1 ? padL + plotW / 2 : padL + (plotW * i) / (n - 1); }
+    function yPos(val){ return padT + plotH - (val / maxVal) * plotH; }
+
+    rctx.font = "10px 'IBM Plex Mono', monospace";
+    rctx.textBaseline = "middle";
+    rctx.textAlign = "right";
+    [0, 0.5, 1].forEach(function(frac){
+      var y = padT + plotH * (1 - frac);
+      rctx.strokeStyle = mutedColor;
+      rctx.globalAlpha = 0.28;
+      rctx.beginPath();
+      rctx.moveTo(padL, y);
+      rctx.lineTo(w - padR, y);
+      rctx.stroke();
+      rctx.globalAlpha = 1;
+      rctx.fillStyle = mutedColor;
+      rctx.fillText(String(Math.round(maxVal * frac)), padL - 6, y);
+    });
+
+    // 룰(Rule1~5)별로 꺾은선 하나씩 - x축은 채널, y축은 그 채널에서
+    // 해당 룰이 발생한 판정 건수. 총 5개 선이 겹쳐 그려진다.
+    RULE_ORDER.forEach(function(rule){
+      rctx.strokeStyle = RULE_COLOR[rule].hex;
+      rctx.lineWidth = 2;
+      rctx.lineJoin = "round";
+      rctx.beginPath();
+      rows.forEach(function(row, i){
+        var val = row.counts[rule] || 0;
+        var x = xPos(i), y = yPos(val);
+        if (i === 0) rctx.moveTo(x, y); else rctx.lineTo(x, y);
+      });
+      rctx.stroke();
+      rows.forEach(function(row, i){
+        var val = row.counts[rule] || 0;
+        var x = xPos(i), y = yPos(val);
+        rctx.beginPath();
+        rctx.arc(x, y, 2.75, 0, Math.PI * 2);
+        rctx.fillStyle = RULE_COLOR[rule].hex;
+        rctx.fill();
+      });
+    });
+
+    // 아이콘 대신 채널 이름 - 대부분 "OO 온도"/"OO 존 온도"처럼 띄어쓰기가
+    // 있어 첫 공백에서 둘로 나눠 2줄로 찍는다("소입로"/"존 온도" 등).
+    // 공백이 없는 "내폭"/"외폭" 같은 이름은 그냥 한 줄로 찍힌다.
+    rows.forEach(function(row, i){
+      var x = xPos(i);
+      var yBase = padT + plotH;
+      var def = CHANNEL_DEFS[row.id];
+      var fullLabel = def ? def.label : row.label;
+      var spaceIdx = fullLabel.indexOf(" ");
+      var lines = spaceIdx === -1 ? [fullLabel] : [fullLabel.slice(0, spaceIdx), fullLabel.slice(spaceIdx + 1)];
+      rctx.fillStyle = mutedColor;
+      rctx.font = "9.5px 'IBM Plex Sans', sans-serif";
+      rctx.textAlign = "center";
+      rctx.textBaseline = "top";
+      lines.forEach(function(line, li){
+        rctx.fillText(line, x, yBase + 4 + li * 12);
+      });
+    });
+  }
+  function buildReportChartLegend(){
+    var el = document.getElementById("reportChartLegend");
+    if (!el) return;
+    el.innerHTML = RULE_ORDER.map(function(r){
+      return '<span style="color:' + RULE_COLOR[r].hex + '"><i></i>' + r + '</span>';
+    }).join("");
+  }
+
+  function renderReport(result){
+    var totalViolEl = document.getElementById("reportTotalViol");
+    if (totalViolEl) totalViolEl.textContent = result.totalViol.toLocaleString();
+    var normalRatioEl = document.getElementById("reportNormalRatio");
+    if (normalRatioEl) normalRatioEl.textContent = (result.normalRatio * 100).toFixed(1) + "%";
+    var avgCpkEl = document.getElementById("reportAvgCpk");
+    if (avgCpkEl){
+      avgCpkEl.textContent = result.avgCpk !== null ? result.avgCpk.toFixed(3) : "—";
+      avgCpkEl.style.color = reportCpkColor(result.avgCpk);
+    }
+    var avgSigmaEl = document.getElementById("reportAvgSigma");
+    if (avgSigmaEl) avgSigmaEl.textContent = result.avgSigma.toFixed(2) + "σ";
+
+    var tbody = document.getElementById("reportTableBody");
+    if (tbody){
+      tbody.innerHTML = result.rows.map(function(row){
+        var cpkText = row.avgCpk !== null ? row.avgCpk.toFixed(3) : "—";
+        // 규격(usl/lsl)이 있는 채널(내폭·외폭)만 실제 공정능력 판정 색상을
+        // 쓴다. 나머지는 관리한계 대용 참고값이므로 항상 회색 + "*" 표시로
+        // 값의 성격이 다르다는 걸 시각적으로도 구분한다("이상점처럼 보이는
+        // 착시" 방지).
+        var cpkColor = row.hasSpec ? reportCpkColor(row.avgCpk) : "var(--ink-muted)";
+        var cpkSuffix = row.hasSpec ? "" : " *";
+        return '<tr>' +
+          '<td>' + row.label + '</td>' +
+          '<td>' + row.counts.Rule1 + '</td>' +
+          '<td>' + row.counts.Rule2 + '</td>' +
+          '<td>' + row.counts.Rule3 + '</td>' +
+          '<td>' + row.counts.Rule4 + '</td>' +
+          '<td>' + row.counts.Rule5 + '</td>' +
+          '<td style="color:' + cpkColor + ';font-weight:' + (row.hasSpec ? '600' : '400') + ';">' + cpkText + cpkSuffix + '</td>' +
+          '<td>' + row.avgSigma.toFixed(2) + 'σ</td>' +
+        '</tr>';
+      }).join("");
+    }
+    drawReportChart(result.rows);
+  }
+
+  function setReportStatus(text){
+    var el = document.getElementById("reportStatus");
+    if (el) el.textContent = text;
+  }
+
+  function runReport(period){
+    // 어느 기간을 "마지막으로 골랐는지"를 버튼 색으로 계속 남겨두지 않는다
+    // (평소엔 흰 버튼 그대로, :active pseudo-class로만 누르는 순간 파랗게).
+    // 계산 중 중복 클릭만 막기 위해 disabled는 그대로 건다.
+    document.querySelectorAll(".report-picker-btn").forEach(function(b){ b.disabled = true; });
+    var reportModalPeriodLabelEl = document.getElementById("reportModalPeriodLabel");
+    if (reportModalPeriodLabelEl) reportModalPeriodLabelEl.textContent = REPORT_PERIOD_LABEL[period];
+    setReportStatus("계산 중…");
+    // setTimeout(0)으로 한 틱 양보해 "계산 중…" 표시가 실제로 화면에 그려진
+    // 뒤에 무거운(특히 연간 131,400틱) 동기 루프를 실행한다.
+    setTimeout(function(){
+      var numTicks = REPORT_PERIOD_TICKS[period];
+      var result = computeReportStats(numTicks);
+      renderReport(result);
+      document.querySelectorAll(".report-picker-btn").forEach(function(b){ b.disabled = false; });
+      setReportStatus("더미 데이터로 " + REPORT_PERIOD_LABEL[period] + "(" + numTicks.toLocaleString() + "틱)치를 즉시 생성한 결과입니다 - 현재 진행 중인 실시간 시뮬레이션과는 별개입니다.");
+    }, 20);
   }
 
   var RULE_LABEL = {
@@ -842,12 +1517,6 @@
     state.violCount++;
   }
 
-  function rampFracFor(pairId){
-    var inj = inject[pairId];
-    if (!inj.active) return 0;
-    return Math.min(1, inj.t / INJECT_RAMP);
-  }
-
   function pushRaw(id, val){
     var def = CHANNEL_DEFS[id];
     var s = chState[id];
@@ -926,50 +1595,75 @@
   function updatePair(causeId, effectId){
     var causeDef = CHANNEL_DEFS[causeId];
     var effectDef = CHANNEL_DEFS[effectId];
-    var pairId = effectDef.pair;
-    var rampFrac = rampFracFor(pairId);
 
-    var causeShift = rampFrac * (6 * causeDef.sigma);
-    var causeVal = causeDef.mu + causeDef.sigma * randn() + causeShift;
+    // 원인 채널의 "자연값"은 룰 주입과 무관하게 항상 계산해 둔다 - 효과 채널의
+    // 인과식은 반드시 이 자연값을 기준으로 계산해야, 원인 채널에 룰을
+    // 강제해도 그 효과가 인과관계를 타고 짝지어진 효과 채널로 새어나가지
+    // 않는다(공정별로만, 인과관계와 무관하게 데이터가 나와야 한다는 원칙 유지).
+    // 단, "공정별 열화 주입(수동)"은 사용자가 대상을 미리 알고 의도적으로
+    // 켜는 기능이므로 여기서는 반대로 causeNatural 자체에 평균이동을 실어,
+    // 그 영향이 인과식을 타고 결과 채널까지 그대로 전파되게 둔다.
+    var causeManualFrac = manualRampFracFor(causeId);
+    var causeShift = causeManualFrac * (6 * causeDef.sigma);
+    var causeNatural = causeDef.mu + causeDef.sigma * randn() + causeShift;
+    var causeVal = overrideOrNatural(causeId, causeNatural);
     pushRaw(causeId, causeVal);
 
-    var noiseMult = 1 + (INJECT_NOISE_MULT - 1) * rampFrac;
+    var noiseMult = 1 + (MANUAL_INJECT_NOISE_MULT - 1) * causeManualFrac;
     var noise = effectDef.noiseSigma * noiseMult * randn();
-    var effectVal = effectDef.mu + effectDef.beta * (causeVal - causeDef.mu) + noise;
+
+    // 내폭/외폭(effectId) 자신에 대한 수동 주입 - 원인 채널과는 완전히
+    // 별개로, "결과물 자체의 이상"을 보여주기 위해 effectNatural에 직접
+    // shift를 더한다. causeVal/causeNatural에는 반영하지 않으므로 원인
+    // 채널 쪽으로 역전파되지 않는다.
+    var effectManualFrac = manualRampFracFor(effectId);
+    var effectShift = effectManualFrac * (6 * effectDef.rawSigma);
+    var effectNatural = effectDef.mu + effectDef.beta * (causeNatural - causeDef.mu) + noise + effectShift;
+    var effectVal = overrideOrNatural(effectId, effectNatural);
     pushRaw(effectId, effectVal);
   }
 
   function updateStandalone(id){
     var def = CHANNEL_DEFS[id];
-    var rampFrac = rampFracFor(def.pair);
-    var shift = rampFrac * (6 * def.sigma);
-    var noiseMult = 1 + (INJECT_NOISE_MULT - 1) * rampFrac;
-    var val = def.mu + def.sigma * noiseMult * randn() + shift;
+    var manualFrac = manualRampFracFor(id);
+    var shift = manualFrac * (6 * def.sigma);
+    var noiseMult = 1 + (MANUAL_INJECT_NOISE_MULT - 1) * manualFrac;
+    var natural = def.mu + def.sigma * noiseMult * randn() + shift;
+    var val = overrideOrNatural(id, natural);
     pushRaw(id, val);
   }
 
   function tick(){
     state.tick++;
 
-    ["chi", "oe", "belt"].forEach(function(pairId){
-      var inj = inject[pairId];
-      var btn = document.getElementById(INJECT_BTN_ID[pairId]);
-      if (inj.active){
-        inj.t++;
-        if (inj.t >= INJECT_TICKS){
-          inj.active = false;
-          inj.t = 0;
-          btn.disabled = false;
-          btn.textContent = injectLabel(pairId);
-        } else {
-          btn.textContent = "주입 중… (" + (INJECT_TICKS - inj.t) + "틱 남음)";
-        }
+    MANUAL_INJECT_CHANNELS.forEach(function(chId){
+      var inj = manualInject[chId];
+      if (!inj.active) return;
+      inj.t++;
+      var btn = document.querySelector('.manual-inject-btn[data-ch="' + chId + '"]');
+      if (inj.t >= MANUAL_INJECT_TICKS){
+        inj.active = false;
+        inj.t = 0;
+        if (btn){ btn.disabled = false; btn.textContent = MANUAL_INJECT_LABEL[chId]; }
+      } else if (btn){
+        btn.textContent = "주입 중… (" + (MANUAL_INJECT_TICKS - inj.t) + "틱 남음)";
       }
     });
 
+    updateStandalone("hardening");
     updatePair("conveyor", "chi");
     updatePair("salt", "oe");
+    updateStandalone("wash");
     updateStandalone("belt");
+
+    if (ruleInject.active && ruleInject.queue.length === 0){
+      ruleInject.active = false;
+      ruleInject.chId = null;
+      ruleInject.rule = null;
+      setRuleInjectButtonsDisabled(false);
+      var statusEl = document.getElementById("ruleInjectStatus");
+      if (statusEl) statusEl.textContent = "주입 완료";
+    }
 
     if (state.tick % CHUNK_SIZE === 0){
       CHANNEL_IDS.forEach(function(id){ updateChunk(id); });
@@ -1341,16 +2035,30 @@
 
     CHANNEL_IDS.forEach(function(cid){
       var btn = document.querySelector('.tab-btn[data-ch="' + cid + '"]');
-      if (!btn) return;
+      // 내폭/외폭 바로가기 버튼(.shortcut-btn)도 같은 채널 id를 쓰므로, 어느
+      // 공정 화면을 보고 있든 두 핵심 산출물의 경고 상태가 항상 드러나게
+      // 같은 로직으로 함께 갱신한다. 제목 바로 아래 공정1~5 버튼
+      // (.process-btn)도 그 채널이 속한 공정 하나를 통해 같은 로직으로
+      // 갱신해, 룰이 어느 채널에서 발생했든 화면을 하나하나 열어보지 않고
+      // 곧장 그 공정을 짚어낼 수 있게 한다(processForChannel이 null을
+      // 반환하는 chi/oe는 공정 버튼이 없으므로 자연히 건너뜀).
+      var shortcutBtn = document.querySelector('.shortcut-btn[data-ch="' + cid + '"]');
+      var pid = processForChannel(cid);
+      var processBtn = pid ? document.querySelector('.process-btn[data-process="' + pid + '"]') : null;
+      if (!btn && !shortcutBtn && !processBtn) return;
       var cVis = visibleTrigFor(cid);
       var cWorst = worstRule(cVis);
-      if (cVis.length > 0 && cWorst){
-        btn.classList.add("alarm");
-        var badge = btn.querySelector(".dot-badge");
-        if (badge) badge.style.setProperty("--badge-color", RULE_COLOR[cWorst].hex);
-      } else {
-        btn.classList.remove("alarm");
-      }
+      [btn, shortcutBtn, processBtn].forEach(function(el){
+        if (!el) return;
+        if (cVis.length > 0 && cWorst){
+          el.classList.add("alarm");
+          var badge = el.querySelector(".dot-badge");
+          if (badge) badge.style.setProperty("--badge-color", RULE_COLOR[cWorst].hex);
+        } else {
+          el.classList.remove("alarm");
+        }
+      });
+      if (shortcutBtn) shortcutBtn.classList.toggle("active", cid === state.activeCh);
     });
 
     var logList = document.getElementById("logList");
@@ -1416,12 +2124,18 @@
     state.tick = 0;
     state.violCount = 0;
     state.log = [];
-    ["chi", "oe", "belt"].forEach(function(pairId){
-      inject[pairId].active = false;
-      inject[pairId].t = 0;
-      var btn = document.getElementById(INJECT_BTN_ID[pairId]);
-      btn.disabled = false;
-      btn.textContent = injectLabel(pairId);
+    ruleInject.active = false;
+    ruleInject.chId = null;
+    ruleInject.rule = null;
+    ruleInject.queue = [];
+    setRuleInjectButtonsDisabled(false);
+    var ruleStatusEl = document.getElementById("ruleInjectStatus");
+    if (ruleStatusEl) ruleStatusEl.textContent = "";
+    MANUAL_INJECT_CHANNELS.forEach(function(chId){
+      manualInject[chId].active = false;
+      manualInject[chId].t = 0;
+      var mBtn = document.querySelector('.manual-inject-btn[data-ch="' + chId + '"]');
+      if (mBtn){ mBtn.disabled = false; mBtn.textContent = MANUAL_INJECT_LABEL[chId]; }
     });
     CHANNEL_IDS.forEach(function(id){
       chState[id] = { rawHistory: [], chunkHistory: [], rawPrevTrig: [], chunkPrevTrig: [], rawWorstColor: [], chunkWorstColor: [], alarm: false, cpk: null, alerts: {}, alertOpen: {}, pendingBatch: {}, reportedBatch: {} };
@@ -1429,26 +2143,100 @@
     render();
   });
 
-  document.getElementById("injectChiBtn").addEventListener("click", function(){
-    if (inject.chi.active) return;
-    inject.chi.active = true;
-    inject.chi.t = 0;
-    this.disabled = true;
+  // ---------- 보고서 출력: 헤더 버튼 → 옆에 기간 선택 패널(블러 없음) →
+  // 기간 클릭 시 중앙 모달로 그 기간의 보고서 표시(배경 블러). ----------
+  // 기간 버튼을 눌러 모달을 열어도 패널 자체는 닫지 않는다 - 모달의 "✕"로
+  // 보고서만 닫고 곧바로 옆 패널에서 다른 기간을 이어서 눌러볼 수 있게
+  // 하기 위해서다. 대신 "배경"(모달의 어두운 오버레이 바깥쪽, 또는 패널·
+  // 버튼·모달 전부의 바깥)을 클릭하면 열려 있던 패널과 모달을 한 번에
+  // 전부 닫는다.
+  var reportOutputBtn = document.getElementById("reportOutputBtn");
+  var reportPickerPanel = document.getElementById("reportPickerPanel");
+  var reportModalOverlay = document.getElementById("reportModalOverlay");
+  var reportModalCloseBtn = document.getElementById("reportModalCloseBtn");
+
+  function toggleReportPicker(forceOpen){
+    var isOpen = typeof forceOpen === "boolean" ? forceOpen : !reportPickerPanel.classList.contains("open");
+    reportPickerPanel.classList.toggle("open", isOpen);
+    reportOutputBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  }
+  reportOutputBtn.addEventListener("click", function(evt){
+    evt.stopPropagation();
+    toggleReportPicker();
   });
-  document.getElementById("injectSaltBtn").addEventListener("click", function(){
-    if (inject.oe.active) return;
-    inject.oe.active = true;
-    inject.oe.t = 0;
-    this.disabled = true;
-  });
-  document.getElementById("injectBeltBtn").addEventListener("click", function(){
-    if (inject.belt.active) return;
-    inject.belt.active = true;
-    inject.belt.t = 0;
-    this.disabled = true;
+  // 패널 바깥(그리고 버튼 바깥) 클릭 시 닫기 - 로그 패널의 click-outside와
+  // 동일한 패턴이지만, 이쪽은 body 블러 클래스를 전혀 건드리지 않는다.
+  // 보고서 모달이 열려 있는 동안의 클릭은 모달 자신의 오버레이 핸들러가
+  // 전담하므로(아래) 여기서는 건드리지 않는다 - 그렇지 않으면 모달 안의
+  // 표/버튼을 클릭할 때마다 옆 패널이 같이 닫혀버린다.
+  document.addEventListener("click", function(evt){
+    if (!reportPickerPanel.classList.contains("open")) return;
+    // 모달 안(오버레이 배경 포함, ✕ 버튼 포함)에서 일어난 클릭은 전부
+    // reportModalOverlay 자신의 핸들러가 이미 처리한다 - 여기서 또
+    // 처리하면 ✕로 모달만 닫으려 했는데 옆 패널까지 같이 닫혀버린다
+    // (✕ 클릭 시점엔 closeReportModal()이 먼저 "open" 클래스를 지운
+    // 뒤라 아래에서 열림 여부로 판별할 수 없어, DOM 포함 관계로 판별).
+    if (reportModalOverlay.contains(evt.target)) return;
+    if (reportOutputBtn.contains(evt.target) || reportPickerPanel.contains(evt.target)) return;
+    toggleReportPicker(false);
   });
 
-  window.addEventListener("resize", function(){ resizeCanvas(); drawChart(); });
+  function openReportModal(period){
+    // 기간 버튼을 누르면 옆 선택 패널은 자동으로 닫는다(보고서 창만 남김).
+    toggleReportPicker(false);
+    reportModalOverlay.classList.add("open");
+    document.body.classList.add("report-modal-open");
+    runReport(period);
+  }
+  function closeReportModal(){
+    reportModalOverlay.classList.remove("open");
+    document.body.classList.remove("report-modal-open");
+  }
+  // 배경(오버레이의 어두운 부분) 클릭: 보고서 창 + 기간 선택 패널을
+  // 한꺼번에 전부 닫는다.
+  function closeReportModalAndPicker(){
+    closeReportModal();
+    toggleReportPicker(false);
+  }
+  document.querySelectorAll(".report-picker-btn").forEach(function(btn){
+    btn.addEventListener("click", function(evt){
+      evt.stopPropagation();
+      openReportModal(this.getAttribute("data-period"));
+    });
+  });
+  reportModalCloseBtn.addEventListener("click", closeReportModal);
+  reportModalOverlay.addEventListener("click", function(evt){
+    if (evt.target === reportModalOverlay) closeReportModalAndPicker();
+  });
+
+  document.querySelectorAll(".rule-inject-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      if (ruleInject.active) return;
+      var rule = this.getAttribute("data-rule");
+      var chId = CHANNEL_IDS[Math.floor(Math.random() * CHANNEL_IDS.length)];
+      var def = CHANNEL_DEFS[chId];
+      ruleInject.active = true;
+      ruleInject.chId = chId;
+      ruleInject.rule = rule;
+      ruleInject.queue = buildInjectionQueue(rule, def);
+      setRuleInjectButtonsDisabled(true);
+      var statusEl = document.getElementById("ruleInjectStatus");
+      if (statusEl) statusEl.textContent = rule + " 주입 중…";
+    });
+  });
+
+  document.querySelectorAll(".manual-inject-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var chId = this.getAttribute("data-ch");
+      var inj = manualInject[chId];
+      if (!inj || inj.active) return;
+      inj.active = true;
+      inj.t = 0;
+      this.disabled = true;
+    });
+  });
+
+  window.addEventListener("resize", function(){ resizeCanvas(); drawChart(); drawReportChart(); });
 
   if (window.ResizeObserver){
     var chartResizeObserver = new ResizeObserver(function(){
@@ -1614,7 +2402,16 @@
     if (evt.target === editModalOverlay) closeEditModal();
   });
   document.addEventListener("keydown", function(evt){
-    if (evt.key === "Escape" && editModalOverlay.classList.contains("open")) closeEditModal();
+    if (evt.key !== "Escape") return;
+    if (editModalOverlay.classList.contains("open")) closeEditModal();
+    // 모달이 열려 있으면 모달만 닫는다("✕"와 동일) - 옆 패널은 열어둔 채
+    // 다른 기간을 이어서 볼 수 있게. 모달이 이미 닫혀 있을 때만 패널 자체를
+    // Esc로 닫는다.
+    if (reportModalOverlay.classList.contains("open")){
+      closeReportModal();
+    } else if (reportPickerPanel.classList.contains("open")){
+      toggleReportPicker(false);
+    }
   });
 
   editSaveBtn.addEventListener("click", function(){
@@ -1634,14 +2431,78 @@
     refreshLiveOcapText();
   });
 
+  // ---------- 공정 선택(공정1~5): 완전 독립 화면 방식 ----------
+  // 공정 버튼을 누르면 그 공정에 속하지 않는 채널 탭 그룹은 화면에서 숨기고
+  // (그룹 구분선도 함께 숨김), 그 공정의 채널로 자동 전환한다. 즉 공정
+  // 버튼이 기존 3그룹 탭 구조를 대체하는 1차 탐색 축이 된다. 내폭/외폭은
+  // 어느 PROCESS_DEFS.channels에도 없으므로, 공정 버튼을 누르면 항상
+  // 그 그룹도 함께 숨겨진다(= 인과관계와 무관하게 공정별 데이터만 노출).
+  function applyProcessFilter(pid){
+    var proc = PROCESS_DEFS.filter(function(p){ return p.id === pid; })[0];
+    if (!proc) return;
+    document.querySelectorAll(".tab-group").forEach(function(grp){
+      var hasMatch = Array.prototype.some.call(grp.querySelectorAll(".tab-btn"), function(b){
+        return proc.channels.indexOf(b.getAttribute("data-ch")) !== -1;
+      });
+      grp.style.display = hasMatch ? "" : "none";
+    });
+    document.querySelectorAll(".tab-divider").forEach(function(div){
+      div.style.display = "none";
+    });
+    var tabBtn = document.querySelector('.tab-btn[data-ch="' + proc.channels[0] + '"]');
+    if (tabBtn) tabBtn.click();
+  }
+  function setActiveProcessBtn(pid){
+    document.querySelectorAll(".process-btn").forEach(function(b){ b.classList.remove("active"); });
+    var pBtn = document.querySelector('.process-btn[data-process="' + pid + '"]');
+    if (pBtn) pBtn.classList.add("active");
+  }
+  document.querySelectorAll(".process-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      setActiveProcessBtn(btn.getAttribute("data-process"));
+      applyProcessFilter(btn.getAttribute("data-process"));
+    });
+  });
+  // 핵심 산출물(내폭/외폭) 전용 화면. 어떤 공정 버튼과도 묶이지 않는
+  // 완전히 별도의 그룹이므로, 공정 버튼과 같은 "탭 그룹 숨기기" 패턴을
+  // 쓰되 기준이 PROCESS_DEFS가 아니라 OUTPUT_CHANNELS라는 점만 다르다.
+  // 공정 버튼 쪽은 모두 비활성화하여 "지금은 어느 공정도 아니라 별도
+  // 관리 대상을 보고 있다"는 상태를 분명히 한다.
+  function showOutputGroup(preferredCh){
+    document.querySelectorAll(".process-btn").forEach(function(b){ b.classList.remove("active"); });
+    document.querySelectorAll(".tab-group").forEach(function(grp){
+      var hasMatch = Array.prototype.some.call(grp.querySelectorAll(".tab-btn"), function(b){
+        return OUTPUT_CHANNELS.indexOf(b.getAttribute("data-ch")) !== -1;
+      });
+      grp.style.display = hasMatch ? "" : "none";
+    });
+    document.querySelectorAll(".tab-divider").forEach(function(div){
+      div.style.display = "none";
+    });
+    var targetCh = OUTPUT_CHANNELS.indexOf(preferredCh) !== -1 ? preferredCh : OUTPUT_CHANNELS[0];
+    var tabBtn = document.querySelector('.tab-btn[data-ch="' + targetCh + '"]');
+    if (tabBtn) tabBtn.click();
+  }
+  document.querySelectorAll(".shortcut-btn").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      showOutputGroup(btn.getAttribute("data-ch"));
+    });
+  });
+
   // ---------- boot: seed with example data so the page opens already in motion ----------
   function seed(){
     for (var i = 0; i < 90; i++) tick();
   }
 
+  // 초기 화면: 공정3(솔트컨베이어)부터 시작 - 기존 기본 활성 채널(conveyor)과 일치.
+  setActiveProcessBtn("p3");
+  applyProcessFilter("p3");
+
   resizeCanvas();
   seed();
   startTimer();
+  buildReportChartLegend();
+  runReport("daily");
 })();
 </script>
 
