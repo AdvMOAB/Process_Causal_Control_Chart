@@ -1,13 +1,14 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>공정 인과 관리도</title>
-<style>html,body{margin:0;padding:0;}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     color-scheme: light;
@@ -566,7 +567,51 @@
   .edit-field input:focus, .edit-field textarea:focus{ outline:none; border-color:var(--accent); }
   .modal-actions{ display:flex; align-items:center; gap:8px; margin-top:14px; }
 
+  /* 보고서 모달 우측 하단 "출력" 버튼 - 누르면 버튼 왼쪽으로 PDF/인쇄 두
+     선택지가 뜬다. 모달 맨 아래(스크롤 영역 안, report-status 다음)에
+     둬 "보고서 우측하단"이라는 요청 위치를 그대로 따른다. report-picker-panel과
+     동일한 패턴: right:calc(100% + 8px)로 왼쪽으로, max-width 트랜지션 +
+     가로 flex row, overflow:hidden 안에서 box-shadow 없이 테두리로만 구분). */
+  .report-export-row{ display:flex; justify-content:flex-end; margin-top:2px; }
+  .report-export-wrap{ position:relative; }
+  .report-export-panel{
+    position:absolute; top:-2px; right:calc(100% + 8px); z-index:10;
+    overflow:hidden; max-width:0; opacity:0; pointer-events:none;
+    transition:max-width .3s cubic-bezier(.4,0,.2,1), opacity .18s ease;
+  }
+  .report-export-panel.open{ max-width:280px; opacity:1; pointer-events:auto; }
+  .report-export-row-inner{
+    display:flex; gap:6px; padding:4px; white-space:nowrap; width:max-content;
+    background:var(--surface); border:1px solid var(--line); border-radius:10px;
+  }
+  .report-export-item{
+    font-family:var(--sans); font-size:12.5px; font-weight:600; text-align:left; cursor:pointer;
+    padding:6px 12px; border:1px solid var(--line); border-radius:8px;
+    background:var(--surface); color:var(--ink);
+  }
+  .report-export-item:hover{ border-color:var(--accent); color:var(--accent); }
+  .report-export-item:active{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+
   footer{ font-size:11.5px; color:var(--ink-muted); line-height:1.6; text-align:center; padding-top:4px; }
+
+  /* 보고서 인쇄/PDF 저장: "출력" 버튼을 누르면 body에 printing-report
+     클래스를 잠깐 붙이고 window.print()를 호출한다 - 이 아티팩트는 서버가
+     없어 실제 PDF 파일을 코드로 직접 만들어 내려받게 할 수 없고(다운로드는
+     뷰어 화면에서 막혀 있음), 브라우저 인쇄 대화상자의 "PDF로 저장"
+     대상을 고르는 표준 방식으로 대신한다. 인쇄 시에는 배경 카드·헤더·
+     블러 전부 숨기고 보고서 모달 내용만 종이에 맞게 그대로 노출한다. */
+  @media print{
+    body.printing-report > *:not(#reportModalOverlay){ display:none !important; }
+    body.printing-report #reportModalOverlay{
+      position:static; inset:auto; display:block; opacity:1; pointer-events:auto;
+      background:none; padding:0;
+    }
+    body.printing-report .modal-card{
+      width:100%; max-height:none; box-shadow:none; border:none; padding:0;
+    }
+    body.printing-report #reportModalCloseBtn,
+    body.printing-report .report-export-row{ display:none !important; }
+  }
 </style>
 
 <div class="wrap">
@@ -809,10 +854,27 @@
       </div>
       <p class="report-hint">Cpk는 내폭·외폭만 설계 규격(USL/LSL) 기준의 실제 공정능력지수입니다 · 나머지 5개 채널(공정1~5 고유 변수)은 기준서상 별도 규격이 없는 공정변수라 관리한계(CL±3σ)를 대신 쓴 참고값(회색 표시)이며, 위 "평균 Cpk(내폭·외폭)"·색상 판정에는 포함되지 않습니다.</p>
       <p class="report-status" id="reportStatus"></p>
+      <div class="report-export-row">
+        <div class="report-export-wrap" id="reportExportWrap">
+          <button id="reportExportBtn" class="btn ghost" type="button" aria-haspopup="true" aria-expanded="false">⬇ 출력</button>
+          <div class="report-export-panel" id="reportExportPanel">
+            <div class="report-export-row-inner">
+              <button class="report-export-item" type="button" id="reportExportPdfBtn">📄 PDF</button>
+              <button class="report-export-item" type="button" id="reportExportPrintBtn">🖨️ 인쇄</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
+<!-- PDF 실제 다운로드 기능에만 쓰인다(인쇄 버튼은 브라우저 기본 인쇄
+     대화상자, 즉 window.print()만으로 실제 프린터 선택이 이미 가능해
+     별도 라이브러리가 필요 없다). 보고서 모달을 이미지로 캡처해
+     PDF에 넣는 용도로 html2canvas + jsPDF UMD 빌드를 로드한다. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 (function(){
   "use strict";
@@ -1377,7 +1439,12 @@
     if (el) el.textContent = text;
   }
 
+  // PDF 파일명에 쓸 영문 기간 키 - 일반 브라우저(깃허브 페이지 등)용
+  // blob 다운로드에서 한글 파일명이 깨지는 문제를 피하기 위해 별도로
+  // 기억해 둔다(아래 triggerReportPdfDownload 참고).
+  var currentReportPeriodKey = null;
   function runReport(period){
+    currentReportPeriodKey = period;
     // 어느 기간을 "마지막으로 골랐는지"를 버튼 색으로 계속 남겨두지 않는다
     // (평소엔 흰 버튼 그대로, :active pseudo-class로만 누르는 순간 파랗게).
     // 계산 중 중복 클릭만 막기 위해 disabled는 그대로 건다.
@@ -2191,6 +2258,7 @@
   function closeReportModal(){
     reportModalOverlay.classList.remove("open");
     document.body.classList.remove("report-modal-open");
+    closeReportExportPanel();
   }
   // 배경(오버레이의 어두운 부분) 클릭: 보고서 창 + 기간 선택 패널을
   // 한꺼번에 전부 닫는다.
@@ -2208,6 +2276,201 @@
   reportModalOverlay.addEventListener("click", function(evt){
     if (evt.target === reportModalOverlay) closeReportModalAndPicker();
   });
+
+  // ---------- 보고서 출력(PDF/인쇄): 모달 우측 하단 "⬇ 출력" 버튼 ----------
+  var reportExportWrap = document.getElementById("reportExportWrap");
+  var reportExportBtn = document.getElementById("reportExportBtn");
+  var reportExportPanel = document.getElementById("reportExportPanel");
+
+  function closeReportExportPanel(){
+    reportExportPanel.classList.remove("open");
+    reportExportBtn.setAttribute("aria-expanded", "false");
+  }
+  reportExportBtn.addEventListener("click", function(evt){
+    evt.stopPropagation();
+    var isOpen = reportExportPanel.classList.toggle("open");
+    reportExportBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  });
+  // 패널 바깥 클릭 시 닫기 - 모달 안이라도 패널·버튼 바깥이면 닫는다.
+  document.addEventListener("click", function(evt){
+    if (!reportExportPanel.classList.contains("open")) return;
+    if (reportExportWrap.contains(evt.target)) return;
+    closeReportExportPanel();
+  });
+
+  // "인쇄" 버튼: 브라우저 기본 인쇄 대화상자를 그대로 연다 - 여기서
+  // 실제 연결된 프린터를 골라 곧바로 인쇄할 수 있다(대상 목록에 물리
+  // 프린터가 그대로 나온다). body에 printing-report 클래스를 잠깐 붙여
+  // 배경 카드·헤더·블러를 전부 숨기고 보고서 모달 내용만 종이에 맞게
+  // 노출한다(@media print 규칙 참고).
+  function triggerReportPrint(){
+    closeReportExportPanel();
+    document.body.classList.add("printing-report");
+    window.print();
+  }
+  document.getElementById("reportExportPrintBtn").addEventListener("click", triggerReportPrint);
+  window.addEventListener("afterprint", function(){
+    document.body.classList.remove("printing-report");
+  });
+
+  // "PDF" 버튼: 인쇄 대화상자를 거치지 않고 실제 PDF 파일을 바로
+  // 내려받는다. 두 가지 실행 환경을 구분해서 처리한다.
+  //  A) 클로드 아티팩트 뷰어: 스크립트가 스스로 만든 다운로드(blob/
+  //     데이터 URL 링크 등)를 뷰어 샌드박스가 막고 있어, 클로드
+  //     아티팩트의 "downloads" 런타임 기능(window.claude.use("downloads"))
+  //     을 통해 뷰어가 직접 띄우는 저장 확인창으로 내려받는다.
+  //  B) 그 밖의 일반 브라우저(깃허브 페이지 미러, 로컬 파일로 열었을 때
+  //     등): 이런 곳엔 위와 같은 다운로드 차단이 없으므로, 일반적인
+  //     <a download> + Blob URL 방식으로 곧바로 내려받는다 - 어느
+  //     웹사이트에서나 통하는 표준적인 파일 다운로드 방법이다.
+  // window.claude 객체 자체의 존재 여부로 두 환경을 구분한다: 클로드
+  // 아티팩트 뷰어에서는 항상 존재하고, 그 밖의 일반 브라우저에는
+  // 존재하지 않는다.
+  function isClaudeArtifactViewer(){
+    return typeof window.claude !== "undefined";
+  }
+  function getDownloadsCapability(){
+    if (!isClaudeArtifactViewer() || typeof window.claude.use !== "function"){
+      return Promise.resolve(null);
+    }
+    try {
+      return window.claude.use("downloads").catch(function(){ return null; });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  }
+  // 일반 브라우저용 표준 다운로드 - 임시 <a download> 링크를 만들어
+  // 클릭한 뒤 곧바로 제거한다. 깃허브 페이지 미러를 포함해 아티팩트
+  // 뷰어가 아닌 모든 곳에서 동작한다.
+  function downloadBlobDirectly(blob, filename){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+
+  function triggerReportPdfDownload(){
+    closeReportExportPanel();
+    var statusEl = document.getElementById("reportStatus");
+    var prevStatusText = statusEl.textContent;
+
+    if (typeof window.html2canvas !== "function" || typeof window.jspdf === "undefined"){
+      statusEl.textContent = "PDF 생성 도구를 불러오지 못해 인쇄 대화상자로 대신합니다 - 대상을 'PDF로 저장'으로 선택해 주세요.";
+      triggerReportPrint();
+      return;
+    }
+
+    statusEl.textContent = "PDF 생성 중...";
+
+    var modalCard = document.querySelector("#reportModalOverlay .modal-card");
+    var modalBody = modalCard.querySelector(".modal-body");
+    var closeBtn = document.getElementById("reportModalCloseBtn");
+    var exportRow = modalCard.querySelector(".report-export-row");
+
+    // 캡처 직전: 닫기 버튼·출력 버튼 행을 숨기고, 모달 본문의 내부
+    // 스크롤(overflow-y:auto)을 잠깐 풀어 스크롤 밖 내용까지 전부
+    // 캡처되게 한다.
+    var prevCloseDisplay = closeBtn.style.display;
+    var prevExportRowDisplay = exportRow.style.display;
+    var prevBodyOverflow = modalBody.style.overflowY;
+    var prevBodyMaxHeight = modalBody.style.maxHeight;
+    closeBtn.style.display = "none";
+    exportRow.style.display = "none";
+    modalBody.style.overflowY = "visible";
+    modalBody.style.maxHeight = "none";
+
+    function restoreModal(){
+      closeBtn.style.display = prevCloseDisplay;
+      exportRow.style.display = prevExportRowDisplay;
+      modalBody.style.overflowY = prevBodyOverflow;
+      modalBody.style.maxHeight = prevBodyMaxHeight;
+    }
+
+    var bgColor = getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() || "#ffffff";
+
+    window.html2canvas(modalCard, { backgroundColor: bgColor, scale: 2, useCORS: true })
+      .then(function(canvas){
+        restoreModal();
+        return getDownloadsCapability().then(function(downloads){
+          var jsPDFCtor = window.jspdf.jsPDF;
+          var pageWidthMm = 210, pageHeightMm = 297, marginMm = 10;
+          var usableWidthMm = pageWidthMm - marginMm * 2;
+          var usableHeightMm = pageHeightMm - marginMm * 2;
+          var pxToMm = usableWidthMm / canvas.width;
+          var imgHeightMm = canvas.height * pxToMm;
+          var doc = new jsPDFCtor({ unit: "mm", format: "a4" });
+
+          if (imgHeightMm <= usableHeightMm){
+            doc.addImage(canvas.toDataURL("image/png"), "PNG", marginMm, marginMm, usableWidthMm, imgHeightMm);
+          } else {
+            var sliceHeightPx = usableHeightMm / pxToMm;
+            var totalPages = Math.ceil(canvas.height / sliceHeightPx);
+            for (var p = 0; p < totalPages; p++){
+              if (p > 0) doc.addPage();
+              var sy = p * sliceHeightPx;
+              var sh = Math.min(sliceHeightPx, canvas.height - sy);
+              var pageCanvas = document.createElement("canvas");
+              pageCanvas.width = canvas.width;
+              pageCanvas.height = sh;
+              pageCanvas.getContext("2d").drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+              doc.addImage(pageCanvas.toDataURL("image/png"), "PNG", marginMm, marginMm, usableWidthMm, sh * pxToMm);
+            }
+          }
+
+          var periodLabel = (document.getElementById("reportModalPeriodLabel").textContent || "").trim();
+          var pdfBlob = doc.output("blob");
+
+          if (downloads){
+            // A) 클로드 아티팩트 뷰어 - 뷰어의 저장 확인창을 통해 내려받는다.
+            //    플랫폼이 매개하는 방식이라 한글 파일명도 문제없이 쓸 수 있다.
+            var filename = "공정_인과_관리도_보고서_" + periodLabel + ".pdf";
+            return downloads.save({ filename: filename, data: pdfBlob }).then(function(){
+              statusEl.textContent = "PDF 저장 완료 - " + filename;
+            }, function(err){
+              if (err && err.code === "declined"){
+                statusEl.textContent = prevStatusText;
+              } else {
+                statusEl.textContent = "PDF 저장 실패(" + (err && err.code ? err.code : "오류") + ") - 인쇄 대화상자로 다시 시도해 주세요.";
+              }
+            });
+          }
+
+          if (!isClaudeArtifactViewer()){
+            // B) 일반 브라우저(깃허브 페이지 미러 등) - <a download> + Blob
+            //    URL로 바로 내려받는다. 크롬 계열 브라우저는 이 방식의
+            //    blob 다운로드에서 파일명에 한글(비-ASCII 문자)이 섞이면
+            //    저장 대화상자에 "download"로만 뜨는 문제가 있어(HTTP
+            //    응답 헤더로 내려주는 일반 다운로드와 달리 매개해 주는
+            //    서버가 없는 blob URL이라 발생) 이 경로에서만 영문 파일명을
+            //    쓴다(REPORT_PERIOD_KEY_EN 참고) - 표시 문구는 그대로 한글.
+            var asciiPeriod = currentReportPeriodKey || "report";
+            var todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+            var asciiFilename = "process_causal_control_chart_report_" + asciiPeriod + "_" + todayStr + ".pdf";
+            try {
+              downloadBlobDirectly(pdfBlob, asciiFilename);
+              statusEl.textContent = "PDF 다운로드됨(" + periodLabel + " 보고서) - " + asciiFilename;
+            } catch (e) {
+              statusEl.textContent = "PDF 다운로드 실패 - 인쇄 대화상자로 다시 시도해 주세요.";
+              triggerReportPrint();
+            }
+            return;
+          }
+
+          // 클로드 아티팩트 뷰어인데 downloads 기능을 못 쓰는 경우(권한 미승인 등)
+          statusEl.textContent = "이 화면에서는 파일 저장 기능을 쓸 수 없어 인쇄 대화상자로 대신합니다 - 대상을 'PDF로 저장'으로 선택해 주세요.";
+          triggerReportPrint();
+        });
+      })
+      .catch(function(){
+        restoreModal();
+        statusEl.textContent = "PDF 생성 중 오류가 발생했습니다 - 인쇄 대화상자로 다시 시도해 주세요.";
+      });
+  }
+  document.getElementById("reportExportPdfBtn").addEventListener("click", triggerReportPdfDownload);
 
   document.querySelectorAll(".rule-inject-btn").forEach(function(btn){
     btn.addEventListener("click", function(){
