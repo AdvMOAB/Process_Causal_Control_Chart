@@ -254,6 +254,22 @@
   .pill.crit .dot{ animation: blink 1s ease-in-out infinite; }
   @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
 
+  /* ---- 호스트/뷰어 실시간 동기화 상태 배지(2026-09-23) ----
+     .pill 옆에 나란히 놓이는 작은 배지 - 발표자 화면에서는 "🟢 HOST"
+     (방송 중임을 조용히 알림), 관중 화면에서는 연결 단계별 문구
+     (대기중/LIVE/연결 끊김/오류)를 보여준다. .pill과 마찬가지로
+     title-row 안에서 줄바꿈되며 hdr-right를 절대 밀어내리지 않는다. */
+  .mode-indicator{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:12.5px; font-weight:700; line-height:1.3;
+    padding:5px 12px; border-radius:999px; white-space:normal; max-width:420px;
+    background:var(--surface-2); color:var(--ink-muted); border:1px solid var(--line);
+  }
+  .mode-indicator.host{ background:var(--ok-bg); color:var(--ok); border-color:transparent; }
+  .mode-indicator.viewer.live{ background:var(--ok-bg); color:var(--ok); border-color:transparent; }
+  .mode-indicator.viewer.stale{ background:var(--crit-bg); color:var(--crit); border-color:transparent; animation: blink 1.2s ease-in-out infinite; }
+  .mode-indicator.viewer.error{ background:var(--crit-bg); color:var(--crit); border-color:transparent; }
+
   .card{
     background:var(--surface); border:1px solid var(--line); border-radius:14px;
     padding:18px 18px 14px;
@@ -663,7 +679,11 @@
   .log-empty{ font-size:12.5px; color:var(--ink-muted); padding:10px 2px; }
 
   .log-fab{
-    position:fixed; left:20px; bottom:20px; z-index:40;
+    position:fixed; left:20px; z-index:40;
+    /* 노치/홈 인디케이터가 있는 폰에서 하단 안전영역을 침범하지 않도록
+       env(safe-area-inset-bottom)을 더한다(2026-09-23, 모바일 대응). 그런
+       세이프에어리어가 없는 기기에서는 0px가 더해져 기존 20px 그대로다. */
+    bottom:calc(20px + env(safe-area-inset-bottom, 0px));
     display:inline-flex; align-items:center; gap:7px;
     padding:11px 18px; border-radius:999px; border:1px solid var(--line);
     background:var(--surface); color:var(--ink);
@@ -835,6 +855,73 @@
     body.printing-report .report-export-row,
     body.printing-report .report-status{ display:none !important; }
   }
+
+  /* ================== 폰 폭 대응(2026-09-23) ==================
+     QR코드로 발표 화면을 그대로 보는 것이 목적이라, 실제 관중이 열어볼
+     화면은 대부분 360~480px 폭의 휴대폰이다. 아래는 그 폭 전용 규칙만
+     모아둔 것 - 기존 380~900px대 그리드 축소 규칙(stats-bar, grid3,
+     각 주입 버튼 행 등)은 이미 위에서 처리되어 있으므로 손대지 않는다. */
+
+  /* 1) .hdr: 데스크톱에서는 제목(좌) / 보고서출력·수정(우)이 한 줄에
+     nowrap으로 나란히 있는데, 폰 폭에서는 그 둘이 서로 밀어낼 공간 자체가
+     없다. 680px 이하에서 세로로 쌓고, hdr-right(보고서출력/수정 버튼
+     묶음)를 제목 블록 아래로 내려 폭 전체를 쓰게 한다. */
+  @media (max-width: 680px){
+    .hdr{ flex-direction:column; align-items:stretch; gap:10px; }
+    .hdr > div:first-child{ flex:none; }
+    .hdr-right{ flex:none; width:100%; align-items:stretch; }
+    .hdr-actions{ width:100%; justify-content:space-between; }
+    /* 헤더 우측 두 번째 줄(내폭/외폭 바로가기 + 실측값/EWMA 세그)도
+       한 줄에 다 안 들어가면 줄바꿈되게 - 넘치는 만큼 가로 스크롤이
+       생기는 것보다 낫다. */
+    .line-mode-row{ flex-wrap:wrap; justify-content:flex-end; row-gap:6px; }
+  }
+
+  /* 3) .log-dock: 로그 패널(.log-panel)과 OCAP 팝오버(.ocap-panel)가
+     데스크톱에서는 옆으로 나란히 뜨는데, 폰 폭에서는 둘이 나란히 들어갈
+     자리가 없어 OCAP 패널이 화면 밖으로 밀리거나 어색하게 겹친다. 760px
+     이하에서 세로로 쌓고, 각 패널이 뷰포트 폭을 더 넉넉히 쓰게 한다. */
+  @media (max-width: 760px){
+    .log-dock{ flex-direction:column; align-items:flex-start; }
+    .log-panel{ width:calc(100vw - 40px); }
+    .ocap-panel{ width:calc(100vw - 40px); }
+  }
+
+  /* 4) 터치 타겟 확대: 데스크톱 기준 세로 패딩(대략 30px 높이)은 손가락
+     탭에는 다소 빡빡하다 - 380~480px 폭에서 주요 버튼류의 세로 패딩을
+     키워 렌더링 높이가 40~44px 안팎이 되게 한다. 가로 패딩·폭 규칙(grid
+     컬럼 수 등)은 기존 그대로 두고 세로 패딩만 건드린다. */
+  @media (max-width: 480px){
+    .btn{ padding-top:13px; padding-bottom:13px; }
+    .process-btn{ padding-top:13px; padding-bottom:13px; }
+    .tab-btn{ padding-top:13px; padding-bottom:13px; }
+    .shortcut-btn{ padding-top:13px; padding-bottom:13px; }
+    .seg button{ padding-top:13px; padding-bottom:13px; }
+    .manual-inject-row .btn.inject,
+    .var-inject-row .btn.inject,
+    .equip-stop-row .btn.inject{ padding-top:13px; padding-bottom:13px; }
+  }
+
+  /* 6) .tabs-card: 900px 이하에서는 이미 세로 flex로 바뀌어 공정1~5 행 ·
+     채널탭 행 · 측정단위 세그 · 실측값/EWMA 세그가 각자 한 줄씩 차지하므로
+     "다 뒤섞여 보이는" 문제는 대체로 해소되어 있다. 폰 폭에서만 나타나는
+     잔여 문제(측정단위 세그 두 그룹이 한 줄에 다 안 들어가는 경우) 하나만
+     추가로 손본다. */
+  @media (max-width: 480px){
+    #modeUnitSeg{ flex-wrap:wrap; }
+  }
+
+  /* 7) 375px 실측 QA(2026-09-23)에서 발견: .matrix-tag(각 주입 카드 h2 옆
+     설명 배지)와 #hoverInfo(차트 위 실측값 판독 바)가 white-space:nowrap
+     한 줄 텍스트라서, h2 자체는 flex-wrap:wrap이어도 배지 하나의 최소
+     너비가 375px 뷰포트보다 넓어 화면 밖으로 삐져나가 가로 스크롤을
+     만들었다(408px vs 375px). 텍스트가 배지/판독바 안에서 여러 줄로
+     접히도록 nowrap을 풀어 해결한다. */
+  @media (max-width: 480px){
+    .matrix-tag{ white-space:normal; }
+    .hover-info{ white-space:normal; flex-wrap:wrap; row-gap:6px; }
+  }
+  /* ================== /폰 폭 대응 ================== */
 </style>
 
 <div class="page-shell">
@@ -845,6 +932,14 @@
       <div class="title-row">
         <h1>공정 인과 관리도</h1>
         <div id="statusPill" class="pill"><span class="dot"></span><span id="statusText">정상</span></div>
+        <!-- 호스트/뷰어 동기화(2026-09-23) - URL에 ?host=1이 있는 발표자
+             화면에서만 보이는 작은 방송중 표시. 눈에 띄지만 방해되지 않게
+             상태 배지 옆에 붙인다. -->
+        <span id="hostBadge" class="mode-indicator host" hidden>🟢 HOST</span>
+        <!-- 뷰어(관중) 화면에서만 보이는 연결 상태 표시 - 최초 스냅샷을
+             받기 전엔 "대기 중", 받으면 "LIVE", 10초 이상 새 스냅샷이 없으면
+             "연결 끊김"으로 바뀐다(initViewerMode/showViewerBadge 참고). -->
+        <span id="viewerStatusBadge" class="mode-indicator viewer" hidden>발표자 연결 대기 중…</span>
       </div>
     </div>
     <div class="hdr-right">
@@ -1219,9 +1314,53 @@
      PDF에 넣는 용도로 html2canvas + jsPDF UMD 빌드를 로드한다. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- 호스트/뷰어 실시간 동기화(2026-09-23): Firebase Realtime Database(compat
+     SDK, v10 고정). 이 파일의 주 배포 대상은 깃허브 페이지(CSP 제약 없음)라
+     공식 gstatic.com URL을 그대로 쓴다 - 클로드 아티팩트 뷰어(CSP가
+     cdnjs.cloudflare.com/cdn.jsdelivr.net만 허용)에는 이 빌드를 올리지
+     않는다(별도 "깃허브 페이지 판" - 프로젝트 지침 참고). -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
 <script>
 (function(){
   "use strict";
+
+  // ---------- 호스트/뷰어 실시간 동기화 (Firebase Realtime Database) ----------
+  // URL에 ?host=1이 있으면 발표자용 "호스트" - 기존 로직 그대로 로컬
+  // 시뮬레이션(tick/seed/startTimer)을 계속 돌리되, 매 tick() 렌더 직후
+  // 압축된 상태 스냅샷을 RTDB 한 경로(live/session/state)에 통째로 덮어쓴다
+  // (.set() - 여러 호스트가 동시에 켜져도 마지막에 쓴 쪽이 항상 이기는
+  // 단순한 "발표자 1명" 모델). 파라미터가 없는 기본 상태(=QR코드가 가리키는
+  // 주소, "뷰어")는 자신의 tick()/seed()를 전혀 돌리지 않고 그 스냅샷만
+  // 구독해 발표자 화면을 그대로 반영한다 - "각자 다른 무작위 시뮬레이션을
+  // 보는" 것이 아니라 "발표자와 같은 화면을 보는" 것이 목적이다(2026-09-23
+  // 요청). 백엔드 서버 없이(깃허브 페이지는 정적 호스팅) 이걸 이루는
+  // 유일한 실용적 방법이라 RTDB를 그대로 쓴다 - 아래 FIREBASE_CONFIG는
+  // 테스트 모드 규칙(2026-10-23까지 유효)으로, 클라이언트에 그대로 담아도
+  // 되는 공개 설정값이다(비밀키 아님).
+  var IS_HOST = /(?:^|[?&])host=1(?:&|$)/.test(location.search || "");
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCSwONBU7iRg2CqlpbjMGUNQlXWtqth9zc",
+    authDomain: "px-pbl.firebaseapp.com",
+    databaseURL: "https://px-pbl-default-rtdb.firebaseio.com",
+    projectId: "px-pbl",
+    storageBucket: "px-pbl.firebasestorage.app",
+    messagingSenderId: "815130023482",
+    appId: "1:815130023482:web:5826b226a2e84597f08703",
+    measurementId: "G-R6STLGG7ET"
+  };
+  var LIVE_STATE_PATH = "live/session/state";
+  // 네트워크 문제나 CDN 로딩 실패로 firebase 전역이 없어도(오프라인 리허설
+  // 등) 로컬 데모 자체는 절대 깨지면 안 된다 - 초기화 자체를 try/catch로
+  // 감싸고, 실패하면 fbStateRef를 null로 둬 이후 broadcastState()/구독
+  // 코드가 조용히 아무 것도 하지 않게 한다.
+  var fbStateRef = null;
+  try {
+    if (typeof firebase !== "undefined" && firebase.initializeApp){
+      firebase.initializeApp(FIREBASE_CONFIG);
+      fbStateRef = firebase.database().ref(LIVE_STATE_PATH);
+    }
+  } catch (e) { fbStateRef = null; }
 
   // ---------- 검증된 v2 인과식 파라미터 (1개월 시뮬레이션 데이터 실측 검증값 재사용) ----------
   var TICK_MS = 1000;
@@ -2409,6 +2548,11 @@
     }
 
     render();
+
+    // 호스트 전용: 렌더 직후 압축 스냅샷을 RTDB로 방송한다. 네트워크가
+    // 잠깐 끊기거나 firebase SDK 로딩 자체가 실패해도(fbStateRef가 null)
+    // 발표자 로컬 데모는 절대 멈추면 안 되므로 try/catch로 완전히 격리한다.
+    if (IS_HOST) broadcastState();
   }
 
   // ---------- 범례 줄별 표시 토글(2026-09-22) ----------
@@ -2433,6 +2577,15 @@
   });
   canvas.addEventListener("pointerleave", function(){
     hoverPixelX = null;
+    drawChart();
+  });
+  // 폰 화면 대응(2026-09-23): "호버"는 터치에 대응 개념이 없어 pointermove만
+  // 으로는 손가락으로 아무리 눌러도 값이 뜨지 않는다. pointerdown에서 같은
+  // 좌표 계산·drawChart 갱신을 그대로 한 번 더 태워, 한 번 탭하면 그 즉시
+  // (드래그 없이도) 크로스헤어·판독값이 뜨게 한다.
+  canvas.addEventListener("pointerdown", function(evt){
+    var rect = canvas.getBoundingClientRect();
+    hoverPixelX = evt.clientX - rect.left;
     drawChart();
   });
 
@@ -2896,7 +3049,14 @@
       cpkEl.style.color = s.cpk >= 1.33 ? "var(--ok)" : (s.cpk >= 1.0 ? RULE_COLOR.Rule2.hex : RULE_COLOR.Rule5.hex);
     }
 
-    var allTrig = visibleTrigFor(id);
+    // activeVisibleTrig(id): 호스트는 그대로 visibleTrigFor(id)(자기
+    // chState를 직접 판정). 뷰어는 chState[id].rawPrevTrig/chunkPrevTrig 등
+    // 판정 중간상태 자체를 절대 받지 않으므로(방송 페이로드에 안 실음),
+    // 대신 호스트가 이미 계산해 방송한 "지금 활성 채널의 즉시 판정 목록"을
+    // 그대로 쓴다 - 상태 pill 문구·차트 알람 테두리·확인칩(alerts, 별도로
+    // 동기화됨) 전부 이 목록을 기준으로 갱신되므로 발표자 화면과 정확히
+    // 같은 결과가 나온다.
+    var allTrig = activeVisibleTrig(id);
     var worst = worstRule(allTrig);
 
     var pill = document.getElementById("statusPill");
@@ -2947,11 +3107,16 @@
       var pid = processForChannel(cid);
       var processBtn = pid ? document.querySelector('.process-btn[data-process="' + pid + '"]') : null;
       if (!btn && !shortcutBtn && !processBtn) return;
-      var cVis = visibleTrigFor(cid);
-      var cWorst = worstRule(cVis);
+      // worstForChannel(cid): 호스트는 지금까지와 동일하게 이 채널의
+      // chState(rawPrevTrig/chunkPrevTrig/reportedBatch)를 직접 훑어 계산한다
+      // (visibleTrigFor). 뷰어는 자기 chState에 활성 채널 말고는 아무 이력도
+      // 없으므로(전체 히스토리를 다 받지 않음 - 대역폭 절약) 대신 호스트가
+      // 매 틱 계산해 방송한 채널별 "가장 심각한 룰" 맵(broadcastWorstByCh)을
+      // 그대로 읽는다 - 2026-09-23 호스트/뷰어 동기화 참고.
+      var cWorst = worstForChannel(cid);
       [btn, shortcutBtn, processBtn].forEach(function(el){
         if (!el) return;
-        if (cVis.length > 0 && cWorst){
+        if (cWorst){
           el.classList.add("alarm");
           var badge = el.querySelector(".dot-badge");
           if (badge) badge.style.setProperty("--badge-color", RULE_COLOR[cWorst].hex);
@@ -3867,6 +4032,312 @@
     });
   });
 
+  // ================== 호스트/뷰어 실시간 동기화 (2026-09-23) ==================
+  // 위 IS_HOST/fbStateRef 설정을 실제로 쓰는 부분. 호스트는 broadcastState()
+  // (tick() 안에서 매 렌더 후 호출)로 상태를 올리고, 뷰어는 initViewerMode()
+  // 에서 그 상태를 구독해 render()까지 다시 태운다 - drawChart()/renderAlerts()/
+  // buildOcapHTML() 등 기존 렌더링 코드를 전혀 새로 만들지 않고 그대로
+  // 재사용한다(그저 chState/state를 "계산"이 아니라 "수신값"으로 채울 뿐).
+
+  // 뷰어 전용 보조 상태 - 호스트가 매 틱 계산해 방송한 결과를 그대로 담아둔다.
+  // 호스트에서는 이 두 변수가 전혀 쓰이지 않는다(worstForChannel/
+  // activeVisibleTrig가 IS_HOST일 땐 기존 계산 경로로 바로 빠지므로).
+  var viewerWorstByCh = {};
+  var viewerActiveAllTrig = null;
+
+  // 채널 탭·공정 버튼·바로가기의 알람 점(뱃지)에 쓸 "그 채널의 가장 심각한
+  // 룰"을 구한다. 호스트는 기존 그대로 자기 chState를 직접 판정하고(모든
+  // 채널의 rawHistory 등 전체 이력을 들고 있으므로), 뷰어는 활성 채널
+  // 말고는 이력을 전혀 받지 않으므로(대역폭 절약을 위해 의도적으로 안 보냄)
+  // 대신 호스트가 방송한 채널별 요약 맵을 그대로 읽는다.
+  function worstForChannel(cid){
+    if (!IS_HOST) return viewerWorstByCh[cid] || null;
+    return worstRule(visibleTrigFor(cid));
+  }
+  // 지금 활성 채널의 "즉시 판정 목록"(상태 pill 문구·차트 알람 테두리·
+  // 확인칩 갱신에 쓰임) - 뷰어는 chState[activeCh]에 rawPrevTrig/
+  // chunkPrevTrig/reportedBatch 같은 판정 중간상태를 아예 갖고 있지 않으므로
+  // (히스토리 배열만 받음) 호스트가 이미 계산해 방송한 목록을 그대로 쓴다.
+  function activeVisibleTrig(id){
+    if (!IS_HOST) return viewerActiveAllTrig || [];
+    return visibleTrigFor(id);
+  }
+
+  // ---------- 호스트: 압축 스냅샷 만들기 + 방송 ----------
+  // 페이로드는 의도적으로 작게 유지한다(RTDB 무료 티어 대역폭/동시접속 한도,
+  // 초당 1회 * 발표 시간 전체를 감당해야 함) - 7채널 전체가 아니라 "지금
+  // 보이는 화면(활성 채널)"의 그래프 데이터만, 나머지 채널은 뱃지 표시용
+  // 요약(가장 심각한 룰 하나)만 보낸다.
+  function buildBroadcastPayload(){
+    var id = state.activeCh;
+    var s = chState[id];
+
+    var worstByCh = {};
+    CHANNEL_IDS.forEach(function(cid){
+      var w = worstRule(visibleTrigFor(cid));
+      if (w) worstByCh[cid] = w;
+    });
+
+    var manualInjectOut = {};
+    var varInjectOut = {};
+    var equipStopOut = {};
+    MANUAL_INJECT_CHANNELS.forEach(function(cid){
+      manualInjectOut[cid] = { active: !!manualInject[cid].active, t: manualInject[cid].t || 0 };
+      varInjectOut[cid] = { active: !!varInject[cid].active, t: varInject[cid].t || 0 };
+      equipStopOut[cid] = { stopped: !!equipStop[cid].stopped };
+    });
+
+    function textOf(elId){
+      var el = document.getElementById(elId);
+      return el ? el.textContent : "";
+    }
+
+    return {
+      activeCh: id,
+      mode: state.mode,
+      tick: state.tick,
+      subTick: state.subTick,
+      locViolCount: state.locViolCount,
+      mrViolCount: state.mrViolCount,
+      lineMode: { loc: !!legendVisible.loc, ewma: !!legendVisible.ewma },
+      // 활성 채널의 "지금 화면에 그려야 하는" 데이터만 - 전체 7채널
+      // rawHistory를 매초 보내는 건 낭비다(사용자 요구사항).
+      active: {
+        rawHistory: s.rawHistory,
+        chunkHistory: s.chunkHistory,
+        mrHistory: s.mrHistory,
+        ewmaHistory: s.ewmaHistory,
+        cpk: s.cpk,
+        alerts: s.alerts,
+        alertOpen: s.alertOpen,
+        allTrig: visibleTrigFor(id)
+      },
+      worstByCh: worstByCh,
+      manualInject: manualInjectOut,
+      varInject: varInjectOut,
+      equipStop: equipStopOut,
+      ruleInjectStatus: textOf("ruleInjectStatus"),
+      varInjectStatus: textOf("varInjectStatus"),
+      equipStopStatus: textOf("equipStopStatus"),
+      // 로그는 이미 40개로 캡되어 있어(pushLog) 그대로 보내도 부담이 적다.
+      log: state.log,
+      ts: Date.now()
+    };
+  }
+  function broadcastState(){
+    if (!fbStateRef) return;
+    try {
+      fbStateRef.set(buildBroadcastPayload()).catch(function(){ /* 네트워크 순간 장애 - 다음 틱에 다시 시도되므로 조용히 무시 */ });
+    } catch (e) { /* SDK 자체가 없거나 오프라인이어도 로컬 데모는 계속되어야 한다 */ }
+  }
+
+  // ---------- 뷰어: 상태 배지 ----------
+  function showViewerBadge(kind){
+    var el = document.getElementById("viewerStatusBadge");
+    if (!el) return;
+    el.hidden = false;
+    el.classList.remove("live", "stale", "error");
+    if (kind === "wait"){
+      el.textContent = "발표자 연결 대기 중…";
+    } else if (kind === "live"){
+      el.textContent = "🔴 LIVE — 발표자 화면과 동기화됨";
+      el.classList.add("live");
+    } else if (kind === "stale"){
+      el.textContent = "⚠️ 연결 끊김 — 발표자 화면과 동기화가 지연되고 있습니다";
+      el.classList.add("stale");
+    } else if (kind === "error"){
+      el.textContent = "⚠️ 실시간 연결을 사용할 수 없습니다";
+      el.classList.add("error");
+    }
+  }
+
+  // ---------- 뷰어: 지금 보이는 채널에 맞춰 공정 필터·탭 강조를 맞춘다 ----------
+  // applyProcessFilter/showOutputGroup(호스트 전용 클릭 흐름)는 내부적으로
+  // tabBtn.click()에 의존하는데, 뷰어 쪽 탭 버튼들은 아래 disableViewerControls()로
+  // disabled 처리되어 있어 - 네이티브 disabled 버튼은 .click()을 호출해도
+  // 등록된 click 리스너 자체가 실행되지 않는다 - 그 흐름을 그대로 재사용할
+  // 수 없다. 그래서 state.activeCh/chState는 이미 채워진 값을 그대로 두고
+  // (applyBroadcastState가 먼저 채움), 여기서는 순수하게 "어느 탭 그룹을
+  // 보여줄지 + 어느 버튼에 active를 줄지"만 DOM에 반영한다.
+  function viewerShowChannelGroup(chId){
+    var pid = processForChannel(chId);
+    document.querySelectorAll(".process-btn").forEach(function(b){ b.classList.remove("active"); });
+    if (pid){
+      var proc = PROCESS_DEFS.filter(function(p){ return p.id === pid; })[0];
+      document.querySelectorAll(".tab-group").forEach(function(grp){
+        var hasMatch = Array.prototype.some.call(grp.querySelectorAll(".tab-btn"), function(b){
+          return proc.channels.indexOf(b.getAttribute("data-ch")) !== -1;
+        });
+        grp.style.display = hasMatch ? "" : "none";
+      });
+      var pBtn = document.querySelector('.process-btn[data-process="' + pid + '"]');
+      if (pBtn) pBtn.classList.add("active");
+    } else {
+      // 내폭/외폭(chi/oe) - 어느 공정에도 속하지 않는 별도 그룹.
+      document.querySelectorAll(".tab-group").forEach(function(grp){ grp.style.display = "none"; });
+    }
+    document.querySelectorAll(".tab-divider").forEach(function(div){ div.style.display = "none"; });
+    document.querySelectorAll(".tab-btn").forEach(function(b){
+      b.classList.toggle("active", b.getAttribute("data-ch") === chId);
+    });
+    document.querySelectorAll(".shortcut-btn").forEach(function(b){
+      b.classList.toggle("active", b.getAttribute("data-ch") === chId);
+    });
+    ["modeRawBtn", "modeChunkBtn", "modeMrBtn"].forEach(function(bid){
+      var el = document.getElementById(bid);
+      if (!el) return;
+      var m = bid === "modeRawBtn" ? "raw" : (bid === "modeChunkBtn" ? "chunk" : "mr");
+      el.classList.toggle("active", state.mode === m);
+    });
+  }
+
+  // ---------- 뷰어: 주입/열화 버튼들의 문구·상태를 방송값으로 맞춘다 ----------
+  // 호스트에서는 tick()이 매초 이 문구들을 직접 갱신하지만(예: "⏹ 중단
+  // (N틱 남음)"), 뷰어는 자기 tick()을 전혀 돌리지 않으므로 스냅샷이 올
+  // 때마다 여기서 대신 갱신해준다. 버튼 자체는 disableViewerControls()로
+  // disabled 처리돼 눌러도 아무 효과가 없지만("호스트 화면과 똑같이 보이는
+  // 것"이 목적이라 문구/카운트다운까지 그대로 비춰야 한다), 텍스트 갱신
+  // 자체는 disabled 여부와 무관하게 항상 가능하다.
+  function syncInjectionUiFromBroadcast(data){
+    var mi = data.manualInject || {};
+    MANUAL_INJECT_CHANNELS.forEach(function(chId){
+      var inj = mi[chId] || { active: false, t: 0 };
+      manualInject[chId].active = inj.active;
+      manualInject[chId].t = inj.t;
+      var btn = document.querySelector('.manual-inject-btn[data-ch="' + chId + '"]');
+      if (!btn) return;
+      if (inj.active){
+        btn.classList.add("injecting");
+        btn.textContent = "⏹ 중단 (" + Math.max(0, MANUAL_INJECT_TICKS - inj.t) + "틱 남음)";
+      } else {
+        btn.classList.remove("injecting");
+        btn.textContent = MANUAL_INJECT_LABEL[chId];
+      }
+    });
+
+    var vi = data.varInject || {};
+    MANUAL_INJECT_CHANNELS.forEach(function(chId){
+      var inj = vi[chId] || { active: false, t: 0 };
+      varInject[chId].active = inj.active;
+      varInject[chId].t = inj.t;
+      var btn = document.querySelector('.var-inject-btn[data-ch="' + chId + '"]');
+      if (!btn) return;
+      if (inj.active){
+        btn.classList.add("injecting");
+        btn.textContent = "⏹ 중단 (" + Math.max(0, VAR_INJECT_TICKS - inj.t) + "틱 남음)";
+      } else {
+        btn.classList.remove("injecting");
+        btn.textContent = MANUAL_INJECT_LABEL[chId];
+      }
+    });
+    var varStatusEl = document.getElementById("varInjectStatus");
+    if (varStatusEl) varStatusEl.textContent = data.varInjectStatus || "";
+
+    var es = data.equipStop || {};
+    MANUAL_INJECT_CHANNELS.forEach(function(chId){
+      var st = es[chId] || { stopped: false };
+      equipStop[chId].stopped = st.stopped;
+      var btn = document.querySelector('.equip-stop-btn[data-ch="' + chId + '"]');
+      if (!btn) return;
+      if (st.stopped){
+        btn.classList.add("stopped");
+        btn.textContent = "▶ " + MANUAL_INJECT_LABEL[chId] + " 재가동";
+      } else {
+        btn.classList.remove("stopped");
+        btn.textContent = MANUAL_INJECT_LABEL[chId];
+      }
+    });
+    var equipStatusEl = document.getElementById("equipStopStatus");
+    if (equipStatusEl) equipStatusEl.textContent = data.equipStopStatus || "";
+
+    var ruleStatusEl = document.getElementById("ruleInjectStatus");
+    if (ruleStatusEl) ruleStatusEl.textContent = data.ruleInjectStatus || "";
+  }
+
+  // ---------- 뷰어: 스냅샷 1건을 받아 기존 state/chState에 "그대로 반영" ----------
+  // 객체 참조 자체는 절대 바꾸지 않는다(state = {...} 처럼 재할당하면, 이미
+  // 그 예전 참조를 클로저로 들고 있는 다른 코드 - render 안의 지역변수 s
+  // 등은 매번 다시 읽으니 괜찮지만 혹시 모를 참조 불일치를 피하기 위해) -
+  // 항상 기존 state/chState[id]의 "속성"만 덮어쓴다.
+  function applyBroadcastState(data){
+    if (!data) return;
+    state.activeCh = data.activeCh || state.activeCh;
+    state.mode = data.mode || state.mode;
+    state.tick = data.tick || 0;
+    state.subTick = data.subTick || 0;
+    state.locViolCount = data.locViolCount || 0;
+    state.mrViolCount = data.mrViolCount || 0;
+    state.log = data.log || [];
+
+    if (data.lineMode){
+      legendVisible.loc = !!data.lineMode.loc;
+      legendVisible.ewma = !!data.lineMode.ewma;
+    }
+
+    var id = state.activeCh;
+    var s = chState[id];
+    var a = data.active || {};
+    s.rawHistory = a.rawHistory || [];
+    s.chunkHistory = a.chunkHistory || [];
+    s.mrHistory = a.mrHistory || [];
+    s.ewmaHistory = a.ewmaHistory || [];
+    s.cpk = (a.cpk === undefined) ? null : a.cpk;
+    s.alerts = a.alerts || {};
+    s.alertOpen = a.alertOpen || {};
+    viewerActiveAllTrig = a.allTrig || [];
+
+    viewerWorstByCh = data.worstByCh || {};
+
+    viewerShowChannelGroup(id);
+    syncInjectionUiFromBroadcast(data);
+
+    render();
+  }
+
+  // ---------- 뷰어 모드에서만 의미 있는 조작을 비활성화(숨기지 않음) ----------
+  // 고정폭 컨트롤(버튼 그리드 등)이 disabled로 사라지지 않고 자리를 그대로
+  // 차지해야 레이아웃이 흔들리지 않는다는 이 파일의 기존 원칙(.seg
+  // button:disabled 등, 위 CSS 주석 참고)을 그대로 따른다.
+  function disableViewerControls(){
+    [
+      ".process-btn", ".tab-btn", ".shortcut-btn",
+      "#modeRawBtn", "#modeChunkBtn", "#modeMrBtn",
+      ".speed-btn", "#playBtn", "#resetBtn",
+      ".rule-inject-btn", ".manual-inject-btn", ".var-inject-btn",
+      "#varInjectRandomBtn", ".equip-stop-btn", "#editOcapBtn"
+    ].forEach(function(sel){
+      document.querySelectorAll(sel).forEach(function(el){ el.disabled = true; });
+    });
+  }
+
+  // ---------- 뷰어 부팅: 자기 tick()은 절대 돌리지 않고 구독만 시작 ----------
+  function initViewerMode(){
+    document.body.classList.add("viewer-mode");
+    disableViewerControls();
+    showViewerBadge("wait");
+    render(); // 첫 스냅샷이 오기 전까지는 빈 차트라도 정상적으로 그려둔다.
+
+    if (!fbStateRef){
+      showViewerBadge("error");
+      return;
+    }
+
+    var staleTimer = null;
+    var STALE_MS = 10000; // 요구사항: 최초 연결 후 ~10초간 새 스냅샷이 없으면 "연결 끊김"
+    fbStateRef.on("value", function(snap){
+      var data = snap.val();
+      if (!data) return;
+      applyBroadcastState(data);
+      showViewerBadge("live");
+      if (staleTimer) clearTimeout(staleTimer);
+      staleTimer = setTimeout(function(){ showViewerBadge("stale"); }, STALE_MS);
+    }, function(){
+      showViewerBadge("error");
+    });
+  }
+
+  // ================== /호스트/뷰어 실시간 동기화 ==================
+
   // ---------- boot: seed with example data so the page opens already in motion ----------
   function seed(){
     for (var i = 0; i < 90; i++) tick();
@@ -3877,10 +4348,21 @@
   applyProcessFilter("p3");
 
   resizeCanvas();
-  seed();
-  startTimer();
   buildReportChartLegend();
-  runReport("daily");
+  runReport("daily"); // 보고서 출력은 호스트/뷰어 둘 다 각자 독립적으로 쓸 수 있는 기능(과제 요구사항).
+
+  if (IS_HOST){
+    // 발표자 화면 - 기존 그대로 로컬 시뮬레이션을 돌리고, 방송중임을
+    // 알리는 작은 배지를 켠다.
+    var hostBadgeEl = document.getElementById("hostBadge");
+    if (hostBadgeEl) hostBadgeEl.hidden = false;
+    seed();
+    startTimer();
+  } else {
+    // 관중 화면 - 자기 시뮬레이션은 전혀 시작하지 않고(seed/startTimer 생략),
+    // 발표자 스냅샷만 구독한다.
+    initViewerMode();
+  }
 })();
 </script>
 
