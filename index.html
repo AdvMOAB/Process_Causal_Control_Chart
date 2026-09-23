@@ -790,6 +790,27 @@
     background:var(--surface); border:1px solid var(--ocap-color, var(--line));
     border-radius:999px; padding:1px 8px;
   }
+  /* ---- 2026-09-23 후속: 판정 방향(상한/하한/해당없음-산포협착) 배지.
+     dirBadgeHTML()이 어디서 쓰이든(경고칩·OCAP 카드·원인후보 공정 줄·
+     판정 로그 목록) --dir-color 변수 하나만 값이 다르고 나머지 생김새는
+     동일하게 두어, "방향 정보는 항상 같은 모양"으로 눈에 익게 했다. ---- */
+  .dir-badge{
+    font-size:10.5px; font-weight:700; color:var(--dir-color, var(--ink-muted));
+    background:var(--surface); border:1px solid var(--dir-color, var(--line));
+    border-radius:999px; padding:1px 8px; white-space:nowrap;
+  }
+  .ocap-cause-dir{ font-size:10.5px; font-weight:700; color:var(--dir-color, var(--ink-muted));
+    background:var(--surface); border:1px solid var(--dir-color, var(--line));
+    border-radius:999px; padding:1px 8px; white-space:nowrap; }
+  /* 경고칩(.alert-chip) 안에 들어가는 방향 배지 - 칩 자체가 이미 룰
+     색상으로 진하게 강조돼 있어, 그 안에서는 배경 없이 텍스트만 살짝
+     굵게 얹는 정도로 눌러 정보 위계를 지킨다(칩의 주인공은 룰 이름). */
+  .alert-chip .chip-dir{
+    font-size:10.5px; font-weight:700; opacity:.85; white-space:nowrap;
+  }
+  /* 판정 로그 목록 행 안의 방향 배지 - 그리드 컬럼 폭이 좁아 문구를
+     "▲ 상한"처럼 짧게(short) 쓰고, 배경 없이 색상 텍스트만으로 구분한다. */
+  .log-dir{ font-size:10.5px; font-weight:700; color:var(--dir-color, var(--ink-muted)); white-space:nowrap; }
   .ocap-rule{
     border-left:3px solid var(--ocap-color, var(--crit));
     background:var(--surface-2); border-radius:8px;
@@ -1703,7 +1724,7 @@
 
   var chState = {};
   CHANNEL_IDS.forEach(function(id){
-    chState[id] = { rawHistory: [], chunkHistory: [], mrHistory: [], ewmaHistory: [], ewmaValue: null, rawPrevTrig: [], chunkPrevTrig: [], mrPrevTrig: [], rawWorstColor: [], chunkWorstColor: [], mrWorstColor: [], alarm: false, cpk: null, alerts: {}, alertOpen: {}, pendingBatch: {}, reportedBatch: {}, chunkAccumSum: 0, chunkAccumSumSq: 0, chunkAccumCount: 0 };
+    chState[id] = { rawHistory: [], chunkHistory: [], mrHistory: [], ewmaHistory: [], ewmaValue: null, rawPrevTrig: [], chunkPrevTrig: [], mrPrevTrig: [], rawTrigDir: {}, chunkTrigDir: {}, mrTrigDir: {}, rawWorstColor: [], chunkWorstColor: [], mrWorstColor: [], alarm: false, cpk: null, alerts: {}, alertOpen: {}, pendingBatch: {}, reportedBatch: {}, chunkAccumSum: 0, chunkAccumSumSq: 0, chunkAccumCount: 0 };
   });
 
   // Report cadence per 기준서 표18: Rule1·Rule5 = 즉시 알람 (shown the instant
@@ -1765,38 +1786,93 @@
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   }
 
+  // 2026-09-23 후속(방향 표시 요청): 각 룰이 "상한 쪽으로 튀었는지 / 하한
+  // 쪽으로 튀었는지"를 판정과 같은 시점에 함께 계산해 triggered.dir에
+  // 담아 돌려준다(triggered 자신은 예전처럼 그냥 문자열 배열이라 기존의
+  // indexOf/concat/filter/forEach 쓰던 코드는 전혀 안 건드려도 된다 - 배열
+  // 객체에 .dir이라는 프로퍼티 하나만 얹은 것). Rule1~4는 판정 조건 자체가
+  // "위로 넘었는지/아래로 넘었는지"를 이미 배타적으로 나눠서 보므로(한
+  // 윈도우 안에서 위·아래 둘 다 조건을 만족하는 경우는 수학적으로 불가능 -
+  // 예: Rule3은 5개 중 4개가 +1σ 초과 OR 5개 중 4개가 -1σ 미만인데, 5개짜리
+  // 창에서 그 둘이 동시에 성립하려면 최소 8개가 필요) dir은 항상 "up" 또는
+  // "down" 중 하나로 결정된다. Rule5(15점 밀집 ±1σ)는 위·아래 개념이 아니라
+  // 산포 자체가 비정상적으로 좁아졌다는 신호라 dir="na"(해당없음)로 둔다.
   function ruleCheck(hist, sigma, cl){
     var n = hist.length;
-    if (n < 1) return [];
     var triggered = [];
+    var dir = {};
+    triggered.dir = dir;
+    if (n < 1) return triggered;
     var last = hist[n - 1];
 
-    if (Math.abs(last - cl) > 3 * sigma) triggered.push("Rule1");
+    if (Math.abs(last - cl) > 3 * sigma){
+      triggered.push("Rule1");
+      dir.Rule1 = last > cl ? "up" : "down";
+    }
 
     if (n >= 3){
       var w3 = hist.slice(n - 3);
       var up2 = w3.filter(function(v){ return v - cl > 2 * sigma; }).length;
       var dn2 = w3.filter(function(v){ return cl - v > 2 * sigma; }).length;
-      if (up2 >= 2 || dn2 >= 2) triggered.push("Rule2");
+      if (up2 >= 2 || dn2 >= 2){
+        triggered.push("Rule2");
+        dir.Rule2 = up2 >= 2 ? "up" : "down";
+      }
     }
     if (n >= 5){
       var w5 = hist.slice(n - 5);
       var up1 = w5.filter(function(v){ return v - cl > sigma; }).length;
       var dn1 = w5.filter(function(v){ return cl - v > sigma; }).length;
-      if (up1 >= 4 || dn1 >= 4) triggered.push("Rule3");
+      if (up1 >= 4 || dn1 >= 4){
+        triggered.push("Rule3");
+        dir.Rule3 = up1 >= 4 ? "up" : "down";
+      }
     }
     if (n >= 9){
       var w9 = hist.slice(n - 9);
       var allUp = w9.every(function(v){ return v > cl; });
       var allDn = w9.every(function(v){ return v < cl; });
-      if (allUp || allDn) triggered.push("Rule4");
+      if (allUp || allDn){
+        triggered.push("Rule4");
+        dir.Rule4 = allUp ? "up" : "down";
+      }
     }
     if (n >= 15){
       var w15 = hist.slice(n - 15);
       var allNear = w15.every(function(v){ return Math.abs(v - cl) < sigma; });
-      if (allNear) triggered.push("Rule5");
+      if (allNear){
+        triggered.push("Rule5");
+        dir.Rule5 = "na";
+      }
     }
     return triggered;
+  }
+
+  // 판정 방향(위 dir) 표시용 라벨·색상. up/down은 실제로 상한(UCL)·하한
+  // (LCL) 어느 쪽으로 이탈했는지, na는 Rule5 전용("해당없음 - 산포 협착").
+  var DIR_INFO = {
+    up:   { label: "상한(UCL) 방향 이탈", short: "▲ 상한", color: "#D2593B" },
+    down: { label: "하한(LCL) 방향 이탈", short: "▼ 하한", color: "#2F6FA6" },
+    na:   { label: "해당없음 (산포 협착)", short: "산포 협착", color: "var(--ink-muted)" }
+  };
+  // 특정 채널이 "지금 이 순간" 그 룰을 어느 방향으로 띄우고 있는지 찾는다 -
+  // 즉시형(raw/chunk/mr 중 하나라도 지금 활성)과 정기보고형(reportedBatch에
+  // 남아있는 구간, 값 자체가 위 dir 문자열)을 모두 확인한다. 판정 로그의
+  // 과거 특정 항목은 이 함수 대신 그 항목에 저장된 entry.dir을 그대로 쓴다
+  // (그 순간의 스냅샷이 남아있으므로 - pushLog 참고).
+  function liveDirFor(id, rule){
+    var s = chState[id];
+    if (!s) return null;
+    if (s.chunkTrigDir && s.chunkTrigDir[rule]) return s.chunkTrigDir[rule];
+    if (s.rawTrigDir && s.rawTrigDir[rule]) return s.rawTrigDir[rule];
+    if (s.mrTrigDir && s.mrTrigDir[rule]) return s.mrTrigDir[rule];
+    if (s.reportedBatch && s.reportedBatch[rule]) return s.reportedBatch[rule];
+    return null;
+  }
+  function dirBadgeHTML(dir, cls){
+    var info = dir && DIR_INFO[dir];
+    if (!info) return "";
+    return '<span class="' + (cls || "dir-badge") + '" style="--dir-color:' + info.color + '">' + info.label + '</span>';
   }
 
   // ---------- 기간별 보고서 (일간/주간/월간/연간) ----------
@@ -2289,10 +2365,16 @@
       var def = CHANNEL_DEFS[pid];
       var pdef = PROCESS_DEFS.filter(function(p){ return p.channels.indexOf(pid) !== -1; })[0];
       var worst = worstRule(visibleTrigFor(pid));
+      // 2026-09-23 후속(방향 표시 요청): 이 후보 공정이 "지금 이 순간"
+      // 어느 쪽(상한/하한)으로 튀고 있는지도 함께 보여준다 - 후보 목록
+      // 자체가 이미 매 렌더링 시점 라이브 상태(visibleTrigFor)를 다시
+      // 훑어 만드는 것이라, 방향도 같은 시점 기준 liveDirFor로 구한다.
+      var dir = worst ? liveDirFor(pid, worst) : null;
       return '<li class="ocap-cause-item">' +
           '<span class="ocap-cause-proc">' + (pdef ? pdef.label : "") + '</span>' +
           '<span class="ocap-cause-ch">' + def.icon + ' ' + def.label + '</span>' +
           (worst ? '<span class="ocap-cause-rule" style="--ocap-color:' + RULE_COLOR[worst].hex + '">' + worst.replace("Rule", "Rule ") + '</span>' : '') +
+          dirBadgeHTML(dir, "ocap-cause-dir") +
         '</li>';
     }).join("");
     return '<div class="ocap-cause-block"><div class="ocap-cause-head">🔎 원인 후보 공정<span class="ocap-cause-hint">P-FMEA 근거 1차 원인 공정 - 같은 시점에 동일 유형 이상 확인됨</span></div>' +
@@ -2323,10 +2405,18 @@
     var causeCandidateHTML = isOutputCh
       ? buildCauseCandidateHTML(primaryEntry && primaryEntry.candidateCauses, chId)
       : '';
-    var cards = (rules || []).map(function(r){
+    var cards = (rules || []).map(function(r, i){
       var o = OCAP_INFO[r];
       if (!o) return "";
       var extra = (typeof extraFor === "function") ? (extraFor(r) || "") : "";
+      // 방향(상한/하한/해당없음) 표시(2026-09-23 후속) - 이 카드가 다루는
+      // "그 로그 항목"의 스냅샷(entry.dir)을 우선 쓰고, 못 찾으면(예: 아직
+      // 로그로 안 남은 즉시 상태) 지금 이 순간의 라이브 방향으로 대체한다.
+      var entryForDir = (explicitEntries && explicitEntries[i] !== undefined)
+        ? explicitEntries[i]
+        : (i === 0 ? primaryEntry : findLatestLogEntry(chId, r));
+      var dirForRule = (entryForDir && entryForDir.dir) || liveDirFor(chId, r);
+      var dirRow = dirForRule ? '<div class="ocap-row"><span class="ocap-k">방향</span><span class="ocap-v">' + dirBadgeHTML(dirForRule) + '</span></div>' : '';
       // 확인이 필요한 채널(고심각도 원인 채널 OR 규격이탈 결과채널)은
       // "자동보정 금지"(Rule5)가 아닌 한, 화면 표시상 자동보정 문구를
       // "엔지니어 확인 대기"로 바꾼다 - 실제 자동보정 로직 자체를 바꾸는
@@ -2340,6 +2430,7 @@
       }
       return '<div class="ocap-rule" style="--ocap-color:' + RULE_COLOR[r].hex + '">' +
           '<div class="ocap-rule-head"><span class="ocap-rule-title">' + o.title + '</span><span class="ocap-rule-cat">' + o.category + '</span></div>' +
+          dirRow +
           '<div class="ocap-row"><span class="ocap-k">담당·에스컬레이션</span><span class="ocap-v">' + o.role + '</span></div>' +
           '<div class="ocap-row' + (autofixPending ? ' ocap-row-pending' : '') + '"><span class="ocap-k">자동보정</span><span class="ocap-v">' + autofixText + '</span></div>' +
           '<div class="ocap-row"><span class="ocap-k">보고</span><span class="ocap-v">' + o.report + '</span></div>' +
@@ -2435,8 +2526,8 @@
   // 안정적으로 다시 찾을 수 있는 고유 id를 함께 매긴다(채널+룰+시각만으로는
   // 같은 틱에 여러 룰이 동시에 찍히는 경우를 구분할 수 없어 별도 카운터를 둠).
   var logIdCounter = 0;
-  function pushLog(chId, rule, mode, category, value){
-    var entry = { id: ++logIdCounter, t: state.tick, ch: chId, rule: rule, mode: mode, action: "", deviationReason: "", resultAfterAction: "" };
+  function pushLog(chId, rule, mode, category, value, dir){
+    var entry = { id: ++logIdCounter, t: state.tick, ch: chId, rule: rule, mode: mode, dir: dir || null, action: "", deviationReason: "", resultAfterAction: "" };
     // 결과채널(chi/oe)에만 규격이탈 여부(specOut)·원인 후보 공정 목록을
     // 함께 기록한다 - 둘 다 "이 로그 항목이 찍힌 바로 그 순간"의 스냅샷이라
     // OCAP 팝오버를 나중에 다시 열어도(예: 판정 로그 목록에서 과거 항목
@@ -2462,13 +2553,16 @@
     if (s.rawHistory.length > MAX_RAW) s.rawHistory.shift();
     var trig = isChannelUnderInjection(id) ? ruleCheck(s.rawHistory, def.rawSigma, def.mu) : [];
     trig.forEach(function(r){
-      if (s.rawPrevTrig.indexOf(r) === -1) pushLog(id, r, "초단위", "loc", val);
+      if (s.rawPrevTrig.indexOf(r) === -1) pushLog(id, r, "초단위", "loc", val, trig.dir[r]);
       // 정기 보고 대상(Rule2~4)은 판정 로그에는 즉시 남기되, 화면 알림은
       // 다음 시간당 청크 경계에서 한꺼번에 공개한다 - accumulate here,
-      // released by the chunk-boundary flush in tick().
-      if (RULE_BATCHED[r]) s.pendingBatch[r] = true;
+      // released by the chunk-boundary flush in tick(). 값 자체를 방향
+      // 문자열("up"/"down")로 저장해 정기 보고 구간에도 방향이 남게 한다
+      // (문자열도 truthy라 기존 if(s.pendingBatch[r]) 류 체크와 호환).
+      if (RULE_BATCHED[r]) s.pendingBatch[r] = trig.dir[r];
     });
     s.rawPrevTrig = trig;
+    s.rawTrigDir = trig.dir || {};
     // 산포(MR) 알람도 함께 반영 - 그렇지 않으면 매 틱(pushRaw는 매초 호출)마다
     // 여기서 s.alarm이 raw+chunk만으로 덮어써져, 청크 경계에서만 갱신되는
     // MR 알람이 다음 틱에 곧바로 꺼져버린다.
@@ -2543,10 +2637,11 @@
     var trig = isChannelUnderInjection(id) ? ruleCheck(s.chunkHistory, def.chunkSigma, def.mu) : [];
     var mode = OUTPUT_CHANNELS.indexOf(id) !== -1 ? "1시간 버킷" : "시간당 청크";
     trig.forEach(function(r){
-      if (s.chunkPrevTrig.indexOf(r) === -1) pushLog(id, r, mode, "loc", mean);
-      if (RULE_BATCHED[r]) s.pendingBatch[r] = true;
+      if (s.chunkPrevTrig.indexOf(r) === -1) pushLog(id, r, mode, "loc", mean, trig.dir[r]);
+      if (RULE_BATCHED[r]) s.pendingBatch[r] = trig.dir[r];
     });
     s.chunkPrevTrig = trig;
+    s.chunkTrigDir = trig.dir || {};
 
     var allTrigNow = trig.concat(s.rawPrevTrig).filter(function(v, i, a){ return a.indexOf(v) === i; });
     var worstNow = worstRule(allTrigNow);
@@ -2564,10 +2659,11 @@
       var mrTrig = isChannelUnderInjection(id) ? ruleCheck(s.mrHistory, def.mrSigma, def.mrMu) : [];
       var mrMode = OUTPUT_CHANNELS.indexOf(id) !== -1 ? "버킷간 MR" : "청크간 MR";
       mrTrig.forEach(function(r){
-        if (s.mrPrevTrig.indexOf(r) === -1) pushLog(id, r, mrMode, "mr", mean);
-        if (RULE_BATCHED[r]) s.pendingBatch[r] = true;
+        if (s.mrPrevTrig.indexOf(r) === -1) pushLog(id, r, mrMode, "mr", mean, mrTrig.dir[r]);
+        if (RULE_BATCHED[r]) s.pendingBatch[r] = mrTrig.dir[r];
       });
       s.mrPrevTrig = mrTrig;
+      s.mrTrigDir = mrTrig.dir || {};
       var mrWorstNow = worstRule(mrTrig);
       s.mrWorstColor.push(mrWorstNow ? RULE_COLOR[mrWorstNow].hex : null);
       if (s.mrWorstColor.length > MAX_CHUNK) s.mrWorstColor.shift();
@@ -3169,10 +3265,15 @@
         chip.title = "클릭하면 조치방안(OCAP) 보기";
         chip.style.setProperty("--chip-color", RULE_COLOR[r].hex);
         chip.style.setProperty("--chip-rgb", RULE_COLOR[r].rgb);
-        chip.innerHTML = '<span class="dot"></span><span>' + r.replace("Rule", "Rule ") + '</span>' +
-          (r === "Rule5" ? '<span class="no-autofix-badge" title="자동보정 대상 아님 · 품질담당자 원인조사 필요">🚫 수동 확인</span>' : '') +
-          '<span class="chevron">›</span>';
       }
+      // 방향 배지(2026-09-23 후속)는 같은 룰이 켜져 있는 동안에도 다시
+      // 튈 때마다(예: 상한 → 하한) 바뀔 수 있어, 칩을 새로 만들 때만이
+      // 아니라 매 렌더링마다 내용을 다시 채운다(칩 자체 엘리먼트와 위
+      // style 변수는 그대로 유지 - innerHTML만 갱신).
+      chip.innerHTML = '<span class="dot"></span><span>' + r.replace("Rule", "Rule ") + '</span>' +
+        dirBadgeHTML(liveDirFor(chId, r), "chip-dir") +
+        (r === "Rule5" ? '<span class="no-autofix-badge" title="자동보정 대상 아님 · 품질담당자 원인조사 필요">🚫 수동 확인</span>' : '') +
+        '<span class="chevron">›</span>';
       chip.setAttribute("aria-expanded", isOpen ? "true" : "false");
       // Re-appending an already-present child moves it rather than
       // duplicating it, so this both inserts brand-new chips AND keeps
@@ -3356,10 +3457,15 @@
         // 항목7: 세 칸(실제 조치/이유/결과) 중 하나라도 기록되어 있으면
         // 목록에서부터 바로 알아볼 수 있게 작은 배지를 룰 옆에 붙인다.
         var hasRecord = !!(e.action || e.deviationReason || e.resultAfterAction);
+        // 2026-09-23 후속(방향 표시 요청): 판정 로그 목록에도 그 항목이
+        // 찍힌 순간의 방향(entry.dir 스냅샷)을 짧은 배지로 붙인다 - 좁은
+        // 컬럼 폭(grid-template-columns)에 맞춰 label 대신 short 문구 사용.
+        var dirInfo = e.dir && DIR_INFO[e.dir];
+        var dirShort = dirInfo ? ' <span class="log-dir" style="--dir-color:' + dirInfo.color + '" title="' + dirInfo.label + '">' + dirInfo.short + '</span>' : '';
         return '<div class="log-row" data-ch="' + e.ch + '" data-rule="' + e.rule + '" data-log-id="' + e.id + '" role="button" tabindex="0">' +
           '<time>' + fmtTime(e.t) + "</time>" +
           '<span class="ch-chip">' + chDef.icon + " " + chDef.label + '</span>' +
-          '<span class="rule">' + RULE_LABEL[e.rule] + (hasRecord ? ' <span class="rec-badge" title="판정 기록 있음">📝</span>' : '') + '</span>' +
+          '<span class="rule">' + RULE_LABEL[e.rule] + dirShort + (hasRecord ? ' <span class="rec-badge" title="판정 기록 있음">📝</span>' : '') + '</span>' +
           '<span class="mode-badge">' + e.mode + "</span></div>";
       }).join("");
     }
@@ -3507,7 +3613,7 @@
     var equipStopStatusResetEl = document.getElementById("equipStopStatus");
     if (equipStopStatusResetEl) equipStopStatusResetEl.textContent = "";
     CHANNEL_IDS.forEach(function(id){
-      chState[id] = { rawHistory: [], chunkHistory: [], mrHistory: [], ewmaHistory: [], ewmaValue: null, rawPrevTrig: [], chunkPrevTrig: [], mrPrevTrig: [], rawWorstColor: [], chunkWorstColor: [], mrWorstColor: [], alarm: false, cpk: null, alerts: {}, alertOpen: {}, pendingBatch: {}, reportedBatch: {}, chunkAccumSum: 0, chunkAccumSumSq: 0, chunkAccumCount: 0 };
+      chState[id] = { rawHistory: [], chunkHistory: [], mrHistory: [], ewmaHistory: [], ewmaValue: null, rawPrevTrig: [], chunkPrevTrig: [], mrPrevTrig: [], rawTrigDir: {}, chunkTrigDir: {}, mrTrigDir: {}, rawWorstColor: [], chunkWorstColor: [], mrWorstColor: [], alarm: false, cpk: null, alerts: {}, alertOpen: {}, pendingBatch: {}, reportedBatch: {}, chunkAccumSum: 0, chunkAccumSumSq: 0, chunkAccumCount: 0 };
     });
     render();
   });
