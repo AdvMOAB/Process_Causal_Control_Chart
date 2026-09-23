@@ -1236,7 +1236,7 @@
 <aside class="side-panel" id="sidePanel">
   <div class="card side-panel-card">
     <div class="side-panel-group">
-      <span class="side-panel-label" title="청크(4분)·버킷(1시간) 집계가 완성되는 속도만 빨라지고, 초단위 화면은 항상 매초 1점입니다.">배속</span>
+      <span class="side-panel-label" title="청크(4분)·버킷(1시간) 집계가 완성되는 속도는 물론, 초단위 원자료 화면도 배속만큼 더 빨리 흐릅니다(2026-09-23~).">배속</span>
       <div class="seg" role="group" aria-label="시간 가속(배속)" id="speedSeg">
         <button class="speed-btn" data-speed="1" type="button">1x</button>
         <button class="speed-btn" data-speed="10" type="button">10x</button>
@@ -1436,8 +1436,13 @@
   var MAX_RAW = 160, MAX_CHUNK = 60;
   // ---------- 항목5(시간 가속 옵션) ----------
   // UI 1틱(TICK_MS=1000, 실제 1초)마다 "서브틱"을 배속만큼 반복 생성해
-  // 청크/버킷 누적기에 채운다 - 초단위(raw) 화면은 이 서브틱 중 마지막
-  // 값 하나만 받아 배속과 무관하게 항상 매초 1점으로 흐른다(tick() 참고).
+  // 청크/버킷 누적기에 채운다. 2026-09-23까지는 초단위(raw) 화면이 이
+  // 서브틱 중 마지막 값 하나만 받아 배속과 무관하게 항상 매초 1점으로만
+  // 흘렀으나, "배속이 초단위 화면에는 왜 적용 안 되냐"는 문의에 따라
+  // 3가지 대안(①현행 유지+안내문구 ②서브틱 전부 반영 ③차트 표시만 빠르게)
+  // 을 검토했고 사용자가 ②(정확도 우선)를 선택 - 이제 서브틱 전부가
+  // pushRaw()로 들어가 raw도 청크/버킷과 동일하게 배속만큼 빨리 흐른다
+  // (tick() 참고).
   var SPEED_PRESETS = [1, 10, 60, 240];
   var SPEED_DEFAULT = 60;
   // ---------- 항목8(2026-09-21): EWMA(지수가중이동평균) 오버레이 ----------
@@ -1579,10 +1584,15 @@
   // 0.25초 만에 소진) 원래 "15초 동안 연속 15개"라는 체감 페이스가 깨진다.
   // 그래서 큐 소비는 tick()에서 UI tick당 딱 1개만 하고, 그 값을 이번 UI
   // tick의 모든 서브틱에 동일하게 적용한다 - 아래 fixedOrNatural이 그
-  // "이번 UI tick에 적용할 고정값"을 받아 대상 채널에만 꽂아준다. 큐 소비
-  // 페이스(=raw 화면에 보이는 페이스)는 배속과 무관하게 유지되고, 대신
-  // 배속이 높을수록 청크/버킷 누적기 안에서 그 값이 반복되는 비중이 커져
-  // 집계 뷰에서도 주입 효과가 더 뚜렷하게 드러난다(설계문서 §2.3).
+  // "이번 UI tick에 적용할 고정값"을 받아 대상 채널에만 꽂아준다. 큐 자체의
+  // 소비 속도(=몇 초 만에 큐가 바닥나는지)는 배속과 무관하게 유지된다(설계문서
+  // §2.3). 단, 2026-09-23부터는 그 고정값이 서브틱마다 raw 화면에도 그대로
+  // pushRaw되므로(위 항목5 주석 참고), 배속이 높을수록 "한 실제 초" 동안
+  // raw 화면·raw 판정 로그에 같은 주입값이 여러 번(최대 배속 횟수만큼)
+  // 연속으로 찍힌다 - Rule2~5(N개 연속 위반)처럼 여러 지점이 필요한 룰은
+  // 배속이 높을수록 한 큐 항목만으로도 즉시 충족될 수 있다는 뜻이다. 배속이
+  // 높을수록 청크/버킷 누적기 안에서도 그 값이 반복되는 비중이 커져 집계
+  // 뷰에서 주입 효과가 더 뚜렷하게 드러나는 것은 기존과 동일.
   function fixedOrNatural(chId, naturalVal, fixedChId, fixedVal){
     if (fixedChId === chId && fixedVal !== null) return fixedVal;
     return naturalVal;
@@ -2662,10 +2672,13 @@
     });
 
     // 판정 룰 강제 발생: 이번 UI tick에 적용할 값을 큐에서 딱 1개만 뽑아
-    // 서브틱 전체에 동일하게 적용한다(fixedOrNatural 주석 참고) - 배속과
-    // 무관하게 raw 화면에서 "매초 1개씩, 정확히 큐 길이만큼" 흘러가는
-    // 기존 체감 페이스를 유지하면서, 배속이 높을수록 청크/버킷 평균에도
-    // 그 값의 비중이 커져 집계 뷰에도 더 뚜렷하게 반영된다.
+    // 서브틱 전체에 동일하게 적용한다(fixedOrNatural 주석 참고) - 배속이
+    // 높을수록 청크/버킷 평균은 물론 (2026-09-23 변경 이후) 원자료 화면에도
+    // 그 값의 비중이 커져 더 뚜렷하게 반영된다. 다만 이 때문에 Rule2~5(여러
+    // 개 연속 위반)처럼 "N개 연속" 조건은 배속이 높을수록 한 틱 안에서
+    // 동일 주입값이 N번 넘게 반복돼 사실상 즉시 충족될 수 있다 - 여러 초에
+    // 걸쳐 서서히 쌓이는 모습을 보여주고 싶다면 배속을 1x~10x로 낮춰서
+    // 시연하는 것을 권장한다.
     var fixedChId = null, fixedVal = null;
     if (ruleInject.active && ruleInject.queue.length){
       fixedChId = ruleInject.chId;
@@ -2673,44 +2686,52 @@
     }
 
     var speed = state.speed || SPEED_DEFAULT;
-    var lastVals = {};
 
+    // ---------- 2026-09-23: 초단위 원자료에도 배속 적용(완전 반영) ----------
+    // 기존에는 이번 UI tick의 서브틱 중 "마지막 값 하나"만 raw 화면에
+    // 반영해, 배속과 무관하게 원자료가 항상 실제 1초에 1점으로만 흐르게
+    // 했었다(그래서 배속을 올려도 원자료 화면·Rule1~5 원자료 판정에는 차이가
+    // 없어 보인다는 문의가 있었음). 9/21에 검토했던 3가지 대안(①현행 유지+
+    // 안내문구 ②서브틱 전부 반영 ③차트 표시만 빠르게) 중 사용자가 ②(정확도
+    // 우선, 서브틱 전부 반영)를 선택 - 이제 매 서브틱마다 그 채널의 실제
+    // 계산값을 즉시 pushRaw()에 넘겨, raw 이력·raw 기준 Rule1~5 판정·판정
+    // 로그가 배속만큼 실제로 더 빨리 쌓인다(청크/버킷과 동일한 원리로
+    // 통일됨). 알려진 트레이드오프(사용자에게 사전 고지 및 확정):
+    //  - MAX_RAW=160 창이 고배속(예: 240배속)에서는 한 UI tick(240서브틱)
+    //    만으로도 가득 차, 화면이 이전 프레임과 이어지지 않고 한번에 크게
+    //    바뀌어 보일 수 있다(청크/버킷 뷰도 이미 같은 특성을 가짐 - 기존
+    //    화면들과 오히려 일관성이 생긴 것으로 본다).
+    //  - "초단위 원자료" 판정 로그·위반 카운트가 배속에 비례해 더 자주
+    //    찍힌다 - 위 Rule2~5 즉시충족 현상과 함께 나타나는 자연스러운 결과.
+    // 호버 시각의 "경과 초" 표시도 이제 raw가 state.tick(실제 초) 대신
+    // state.subTick(배속 반영 누적 시뮬레이션 초) 기준으로 바뀐다 -
+    // 아래 drawChart()의 tickAtIdx 계산 참고.
     for (var sub = 0; sub < speed; sub++){
       state.subTick++;
 
-      // 항목10: 정지된 채널은 accumulateChunk/lastVals를 건너뛴다 - 값 자체는
+      // 항목10: 정지된 채널은 accumulateChunk/pushRaw를 건너뛴다 - 값 자체는
       // (인과관계로 엮인 짝 채널이 계속 흐를 수 있게) 그대로 계산하되, 정지된
       // 채널 자신의 청크 누적·raw 이력에는 반영하지 않아 화면이 그 자리에서
       // 완전히 멈춘 것처럼 보인다. 인과쌍(솔트컨베이어→내폭, 솔트조→외폭)도
       // 위 두 주입 기능과 동일하게 서로 독립 취급 - 한쪽만 멈춰도 다른쪽은
       // 계속 흐른다.
       var hardeningVal = computeStandaloneValue("hardening", fixedChId, fixedVal);
-      if (!equipStop.hardening.stopped){ accumulateChunk("hardening", hardeningVal); lastVals.hardening = hardeningVal; }
+      if (!equipStop.hardening.stopped){ accumulateChunk("hardening", hardeningVal); pushRaw("hardening", hardeningVal); }
 
       var conv = computePairValues("conveyor", "chi", fixedChId, fixedVal);
-      if (!equipStop.conveyor.stopped){ accumulateChunk("conveyor", conv.causeVal); lastVals.conveyor = conv.causeVal; }
-      if (!equipStop.chi.stopped){ accumulateChunk("chi", conv.effectVal); lastVals.chi = conv.effectVal; }
+      if (!equipStop.conveyor.stopped){ accumulateChunk("conveyor", conv.causeVal); pushRaw("conveyor", conv.causeVal); }
+      if (!equipStop.chi.stopped){ accumulateChunk("chi", conv.effectVal); pushRaw("chi", conv.effectVal); }
 
       var salt = computePairValues("salt", "oe", fixedChId, fixedVal);
-      if (!equipStop.salt.stopped){ accumulateChunk("salt", salt.causeVal); lastVals.salt = salt.causeVal; }
-      if (!equipStop.oe.stopped){ accumulateChunk("oe", salt.effectVal); lastVals.oe = salt.effectVal; }
+      if (!equipStop.salt.stopped){ accumulateChunk("salt", salt.causeVal); pushRaw("salt", salt.causeVal); }
+      if (!equipStop.oe.stopped){ accumulateChunk("oe", salt.effectVal); pushRaw("oe", salt.effectVal); }
 
       var washVal = computeStandaloneValue("wash", fixedChId, fixedVal);
-      if (!equipStop.wash.stopped){ accumulateChunk("wash", washVal); lastVals.wash = washVal; }
+      if (!equipStop.wash.stopped){ accumulateChunk("wash", washVal); pushRaw("wash", washVal); }
 
       var beltVal = computeStandaloneValue("belt", fixedChId, fixedVal);
-      if (!equipStop.belt.stopped){ accumulateChunk("belt", beltVal); lastVals.belt = beltVal; }
+      if (!equipStop.belt.stopped){ accumulateChunk("belt", beltVal); pushRaw("belt", beltVal); }
     }
-
-    // raw 화면·raw Rule1~5는 이번 UI tick의 "마지막 서브틱" 값만 사용한다 -
-    // 배속과 무관하게 항상 매초 1점으로 흐른다(설계문서 §2.2/사용자 확정).
-    // 항목10: 정지된 채널은 lastVals[id]가 아예 채워지지 않으므로(위 루프)
-    // pushRaw 자체를 건너뛰어 raw 이력도 늘어나지 않는다 - 차트가 정지 시점
-    // 마지막 값에서 그대로 멈춘 것처럼 보인다.
-    CHANNEL_IDS.forEach(function(id){
-      if (lastVals[id] === undefined) return;
-      pushRaw(id, lastVals[id]);
-    });
 
     if (ruleInject.active && ruleInject.queue.length === 0){
       ruleInject.active = false;
@@ -3018,13 +3039,14 @@
       // The value/time readout lives in the persistent pill fixed under the
       // top-right legend (#hoverInfo), not in a floating canvas tooltip -
       // hovering only fills it in, it never moves and never covers the chart.
-      // raw는 UI tick(=항상 실제 1초) 기준, 청크·버킷은 subTick(=배속 반영
-      // 누적 시뮬레이션 초) 기준으로 "경과 시간"을 잰다 - 배속이 오르면
-      // 청크·버킷 한 칸이 나타내는 실제 UI tick 수가 달라지므로, raw처럼
-      // state.tick에 고정폭을 곱하는 방식은 더 이상 맞지 않는다.
-      var tickAtIdx = mode === "raw"
-        ? Math.max(0, state.tick - (n - 1 - hIdx))
-        : Math.max(0, state.subTick - (n - 1 - hIdx) * def.aggSamples);
+      // 2026-09-23: raw도 이제 매 서브틱마다 pushRaw되므로(배속 완전 반영),
+      // "경과 시간"은 raw·청크·버킷 모두 동일하게 subTick(=배속 반영 누적
+      // 시뮬레이션 초) 기준으로 잰다 - raw는 한 칸=서브틱 1개(배수 1),
+      // 청크·버킷은 한 칸=aggSamples개 서브틱이라는 차이만 있을 뿐, 더 이상
+      // raw만 state.tick(실제 초) 기준으로 따로 셀 이유가 없다(이전에는
+      // raw가 항상 실제 1초에 1점으로 고정돼 있어 state.tick을 썼었음).
+      var idxMultiplier = mode === "raw" ? 1 : def.aggSamples;
+      var tickAtIdx = Math.max(0, state.subTick - (n - 1 - hIdx) * idxMultiplier);
       // 값 대신 이 지점의 σ 이탈(관리한계 대비 편차)을 보여준다 - 아래 통계
       // 카드가 "평균 σ 이탈"로 바뀌면서, 이 실시간/호버 카드가 "현재 채널
       // σ 이탈"(한 지점 기준 순간값) 역할을 이어받는다.
@@ -3044,7 +3066,7 @@
       var liveVal = data[data.length - 1];
       var liveOut = Math.abs(liveVal - cl) > 3 * sigma;
       var liveValueText = (Math.abs(liveVal - cl) / sigma).toFixed(2) + "σ";
-      var liveTimeText = fmtTime(mode === "raw" ? state.tick : state.subTick) + "s 경과";
+      var liveTimeText = fmtTime(state.subTick) + "s 경과";
       var liveColorHist = mode === "raw" ? s.rawWorstColor : (mode === "mr" ? s.mrWorstColor : s.chunkWorstColor);
       var liveAlarmColor = liveColorHist[liveColorHist.length - 1] || null;
       setHoverInfo(liveValueText, liveTimeText, liveOut, liveAlarmColor);
