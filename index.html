@@ -2270,10 +2270,20 @@
   // 목록은 findCauseCandidates()가 그 로그 항목이 찍힌 순간 기준으로 미리
   // 계산해 둔 값(pushLog 참고)을 그대로 보여준다 - 공정 채널(hardening 등)
   // 자신의 OCAP 팝업에는 이 섹션 자체가 나오지 않는다.
-  function buildCauseCandidateHTML(candidates){
+  // 2026-09-23 후속 반영: candidates는 이제 findCauseCandidates(rule,
+  // outputChId)가 P-FMEA 1차 확정 공정 하나만 훑어 만든 0~1개짜리 목록이라,
+  // 비어 있을 때 그냥 "공정 채널이 없습니다"라고만 하면 정보가 부족하다 -
+  // outputChId를 받아 "원래 의심해야 할 그 공정 이름"을 empty-state 문구에
+  // 직접 밝혀준다(P-FMEA 근거 분석: claude/내폭외폭_원인후보공정_PFMEA근거_
+  // 분석_2026-09-23.md).
+  function buildCauseCandidateHTML(candidates, outputChId){
     if (!candidates || !candidates.length){
+      var primaryId = OUTPUT_PRIMARY_CAUSE[outputChId];
+      var primaryDef = primaryId ? CHANNEL_DEFS[primaryId] : null;
+      var primaryLabel = primaryDef ? (primaryDef.icon + ' ' + primaryDef.label) : "";
       return '<div class="ocap-cause-block"><div class="ocap-cause-head">🔎 원인 후보 공정</div>' +
-        '<p class="ocap-cause-empty">이 시점 기준으로 동일 유형 이상을 보인 공정 채널이 없습니다.</p></div>';
+        '<p class="ocap-cause-empty">이 시점 기준으로 P-FMEA 근거 1차 원인 공정' +
+        (primaryLabel ? '(' + primaryLabel + ')' : '') + '에서 동일 유형 이상이 확인되지 않습니다.</p></div>';
     }
     var items = candidates.map(function(pid){
       var def = CHANNEL_DEFS[pid];
@@ -2285,7 +2295,7 @@
           (worst ? '<span class="ocap-cause-rule" style="--ocap-color:' + RULE_COLOR[worst].hex + '">' + worst.replace("Rule", "Rule ") + '</span>' : '') +
         '</li>';
     }).join("");
-    return '<div class="ocap-cause-block"><div class="ocap-cause-head">🔎 원인 후보 공정<span class="ocap-cause-hint">같은 시점에 동일 유형 이상을 보인 공정 - 참고용, 추가 확인 필요</span></div>' +
+    return '<div class="ocap-cause-block"><div class="ocap-cause-head">🔎 원인 후보 공정<span class="ocap-cause-hint">P-FMEA 근거 1차 원인 공정 - 같은 시점에 동일 유형 이상 확인됨</span></div>' +
       '<ul class="ocap-cause-list">' + items + '</ul></div>';
   }
 
@@ -2311,7 +2321,7 @@
           '<details class="ocap-severity-detail"><summary>근거 보기</summary>' + confirmReason.evidence + '</details></span>'
       : '';
     var causeCandidateHTML = isOutputCh
-      ? buildCauseCandidateHTML(primaryEntry && primaryEntry.candidateCauses)
+      ? buildCauseCandidateHTML(primaryEntry && primaryEntry.candidateCauses, chId)
       : '';
     var cards = (rules || []).map(function(r){
       var o = OCAP_INFO[r];
@@ -2374,36 +2384,41 @@
   // 벗어난 통계적 이상과 달리, 실제 완제품 치수 자체가 규격을 벗어난
   // 경우에만 자동보정을 보류하고 사람 확인을 요구한다.
   //
-  // 또한 지금까지 chi.causeId="conveyor"/oe.causeId="salt"처럼 원인-결과가
-  // 코드에 고정되어 있던 것은 "실제 데이터를 어떻게 만들어낼지"(시뮬레이션
-  // 인과식, computePairValues) 목적으로 계속 쓰고, 화면에 보여줄 "원인 후보
-  // 힌트"는 완전히 별개의 새 로직으로 둔다(요청 3번) - 결과채널에 이상이
-  // 뜨면 그 시점 기준으로 5개 공정 채널(hardening/conveyor/salt/wash/belt)
-  // 전체를 훑어 같은 Rule 번호가 동시에 떠 있는 공정을 찾아 후보로 표시한다.
+  // [2026-09-23 최초 구현, 아래 "2026-09-23 후속 반영"으로 대체됨] 최초
+  // 버전은 결과채널에 이상이 뜨면 5개 공정 채널(hardening/conveyor/salt/
+  // wash/belt) 전체를 "같은 Rule 동시발생" 기준으로 훑어 후보로 표시했다 -
+  // 물리적 인과관계와 무관하게 화면 표시용으로 의도적으로 넓게 잡은
+  // 버전이었다(당시 판단 근거는 아래 유지).
+  //
+  // ---------- 2026-09-23 후속 반영: P-FMEA 근거로 후보를 좁힘 ----------
+  // 별도 요청으로 P-FMEA 고장모드·고장원인을 실제로 분석해 "내폭/외폭이
+  // 이상해졌을 때 실제로 의심해야 할 공정이 어디인가"를 정리했다
+  // (claude/내폭외폭_원인후보공정_PFMEA근거_분석_2026-09-23.md). 그 문서의
+  // "1차 확정" 판정 그대로, 5개 공정 전체를 훑던 위 최초 버전을 **내폭(chi)
+  // →솔트컨베이어(이슈7), 외폭(oe)→솔트조(이슈5) 단 하나씩만 보는 방식**으로
+  // 좁혔다 - 문서상 "2차 후보"(이슈6 염욕제 농도·청정도, 이슈8 메시벨트
+  // 이송속도)는 계측 태그 자체가 없어 앱에 채널도 없고, 사용자가 "1차
+  // 후보를 예시로 보여줄 예정이니 2차 후보는 반영하지 말라"고 명시적으로
+  // 확정해 이번 반영 범위에서 뺐다(문서 §7 제안 1·3번 중 3번은 "데이터팀
+  // 확인" 항목이라 착수 보류, 1번만 반영).
+  //
   // "동시"의 정의는 화면 다른 곳(탭 배지 등)에서 이미 쓰는 visibleTrigFor()
   // 기준(즉시 룰=현재 값, 정기보고 룰=최근 보고 구간)을 그대로 재사용해
-  // 기준을 통일했다. 여러 공정이 한꺼번에 걸리면 ①더 심각한 룰(Rule5>4>
-  // 3>2>1) ②공정 순서(1~5) 순으로 정렬한다 - 두 기준 모두 이미 코드에 있는
-  // 개념(RULE_ORDER, PROCESS_DEFS)을 그대로 재사용한 것으로, 개발팀 요청의
-  // "판단해서 진행" 항목에 대한 결정이다.
+  // 기준을 통일했다 - 이 부분은 최초 버전과 동일하게 유지. 후보가 이제
+  // 채널당 최대 1개뿐이라 기존의 "여러 후보 중 심각도·공정순서로 정렬"
+  // 로직은 더 이상 필요 없어 제거했다.
   //
-  // 정확한 "그 순간의 스냅샷"은 서브틱 처리 순서(hardening→conveyor→chi→
-  // salt→oe→wash→belt) 특성상 wash/belt가 salt/oe보다 한 서브틱(배속에
-  // 따라 최대 1초) 늦게 반영될 수 있다는 근사가 있지만, 이 앱의 다른 모든
-  // "현재 상태" 판단(worstRule, visibleTrigFor 등)도 동일한 근사를 이미
-  // 쓰고 있어 일관성을 유지했다.
-  var PROCESS_CAUSE_CHANNEL_ORDER = PROCESS_DEFS.map(function(p){ return p.channels[0]; });
-  function findCauseCandidates(rule){
-    var matches = PROCESS_CAUSE_CHANNEL_ORDER.filter(function(pid){
-      return visibleTrigFor(pid).indexOf(rule) !== -1;
-    });
-    matches.sort(function(a, b){
-      var wa = RULE_ORDER.indexOf(worstRule(visibleTrigFor(a)));
-      var wb = RULE_ORDER.indexOf(worstRule(visibleTrigFor(b)));
-      if (wa !== wb) return wb - wa; // 심각한 룰 먼저(내림차순)
-      return PROCESS_CAUSE_CHANNEL_ORDER.indexOf(a) - PROCESS_CAUSE_CHANNEL_ORDER.indexOf(b); // 공정 순서(1~5)
-    });
-    return matches;
+  // chi.causeId="conveyor"/oe.causeId="salt"(computePairValues, 시뮬레이션
+  // 인과식)와 지금 이 OUTPUT_PRIMARY_CAUSE 값이 결과적으로 같아졌지만,
+  // 목적이 다르므로("실제 데이터를 어떻게 만들지" vs "화면에 뭘 보여줄지")
+  // 상수는 계속 분리해서 관리한다 - 둘 중 하나만 바뀌어야 하는 상황이
+  // 생기면(예: 화면 표시 후보만 넓히고 싶을 때) 서로 영향을 주지 않아야
+  // 하기 때문.
+  var OUTPUT_PRIMARY_CAUSE = { chi: "conveyor", oe: "salt" };
+  function findCauseCandidates(rule, outputChId){
+    var primaryId = OUTPUT_PRIMARY_CAUSE[outputChId];
+    if (!primaryId) return [];
+    return visibleTrigFor(primaryId).indexOf(rule) !== -1 ? [primaryId] : [];
   }
   // 판정 로그는 최신이 배열 맨 앞(unshift)이므로, 채널+룰이 일치하는 첫
   // 항목이 곧 "가장 최근" 발생 기록이다 - 실시간 경고칩(OCAP 팝오버)이
@@ -2430,7 +2445,7 @@
       var outDef = CHANNEL_DEFS[chId];
       entry.specOut = !!(value !== undefined && value !== null && outDef && outDef.usl !== undefined &&
         (value > outDef.usl || value < outDef.lsl));
-      entry.candidateCauses = findCauseCandidates(rule);
+      entry.candidateCauses = findCauseCandidates(rule, chId);
     }
     state.log.unshift(entry);
     if (state.log.length > 40) state.log.pop();
