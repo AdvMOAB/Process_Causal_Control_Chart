@@ -269,6 +269,24 @@
   .mode-indicator.viewer.live{ background:var(--ok-bg); color:var(--ok); border-color:transparent; }
   .mode-indicator.viewer.stale{ background:var(--crit-bg); color:var(--crit); border-color:transparent; animation: blink 1.2s ease-in-out infinite; }
   .mode-indicator.viewer.error{ background:var(--crit-bg); color:var(--crit); border-color:transparent; }
+  /* 호스트 전송 실패 경고(2026-09-23 추가) - 지금까지는 broadcastState()
+     실패를 호스트 쪽에서 완전히 조용히 무시하고 있어(다음 tick 재시도),
+     발표 중 네트워크가 몇 초 끊겨도 발표자는 전혀 모른 채 참석자 화면에서만
+     "연결 끊김"이 뜨는 문제가 있었다. Firebase 특수 경로 .info/connected를
+     구독해 실제 서버 연결이 끊긴 동안에만 호스트 배지 옆에 이 경고를
+     띄운다. */
+  .mode-indicator.host-warn{ background:var(--crit-bg); color:var(--crit); border-color:transparent; animation: blink 1.2s ease-in-out infinite; }
+
+  /* 뷰어(관중) 화면에서 열화 주입 카드 4종 완전히 숨김(2026-09-23 추가) -
+     주입 버튼은 발표자가 시연을 조작하는 용도라 참석자 화면에는 애초에
+     필요가 없다. 지금까지는 disableViewerControls()로 버튼만 비활성화해
+     회색으로 보이게 남겨뒀는데, 카드 자체를 화면에서 지워 참석자 화면을
+     더 간결하게 만든다(호스트 화면은 그대로 유지 - body에 viewer-mode
+     클래스가 붙는 건 뷰어일 때뿐이다, initViewerMode 참고). */
+  body.viewer-mode .rule-inject-card,
+  body.viewer-mode .manual-inject-card,
+  body.viewer-mode .var-inject-card,
+  body.viewer-mode .equip-stop-card{ display:none; }
 
   .card{
     background:var(--surface); border:1px solid var(--line); border-radius:14px;
@@ -936,8 +954,12 @@
              화면에서만 보이는 작은 방송중 표시. 눈에 띄지만 방해되지 않게
              상태 배지 옆에 붙인다. -->
         <span id="hostBadge" class="mode-indicator host" hidden>🟢 HOST</span>
+        <!-- 호스트 전송 실패 경고(2026-09-23 추가) - .info/connected 구독으로
+             실제 Firebase 서버 연결이 끊긴 동안에만 노출(watchHostConnection
+             참고). 평소엔 hidden 상태. -->
+        <span id="hostConnWarn" class="mode-indicator host-warn" hidden>⚠️ 참석자 화면 전송 끊김</span>
         <!-- 뷰어(관중) 화면에서만 보이는 연결 상태 표시 - 최초 스냅샷을
-             받기 전엔 "대기 중", 받으면 "LIVE", 10초 이상 새 스냅샷이 없으면
+             받기 전엔 "대기 중", 받으면 "LIVE", 15초 이상 새 스냅샷이 없으면
              "연결 끊김"으로 바뀐다(initViewerMode/showViewerBadge 참고). -->
         <span id="viewerStatusBadge" class="mode-indicator viewer" hidden>발표자 연결 대기 중…</span>
       </div>
@@ -3162,6 +3184,10 @@
       state.activeCh = btn.getAttribute("data-ch");
       document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.remove("active"); });
       btn.classList.add("active");
+      // 2026-09-23: 참석자가 이 핸들러로 채널을 직접 골랐다는 뜻이므로,
+      // 이후 스냅샷이 와도 화면을 발표자 채널로 강제로 되돌리지 않는다
+      // (applyBroadcastState 참고). 호스트에서는 그냥 no-op.
+      if (!IS_HOST) viewerHasOwnSelection = true;
       // Each channel keeps its own alerts map (chState[id].alerts /
       // alertOpen), so switching tabs simply re-renders with that channel's
       // own unacknowledged alerts - renderAlerts() rebuilds the shared dock
@@ -4039,43 +4065,64 @@
   // buildOcapHTML() 등 기존 렌더링 코드를 전혀 새로 만들지 않고 그대로
   // 재사용한다(그저 chState/state를 "계산"이 아니라 "수신값"으로 채울 뿐).
 
-  // 뷰어 전용 보조 상태 - 호스트가 매 틱 계산해 방송한 결과를 그대로 담아둔다.
-  // 호스트에서는 이 두 변수가 전혀 쓰이지 않는다(worstForChannel/
+  // 뷰어 전용 보조 상태. 2026-09-23(공정 자유 선택 개편): 예전엔 호스트가
+  // "지금 보고 있는 채널 하나"만 전체 이력을 방송하고 나머지 6채널은 뱃지용
+  // 요약(가장 심각한 룰)만 보냈다 - 참석자 화면이 발표자 화면을 그대로
+  // 미러링만 하면 됐으므로. 이제 참석자가 자기 폰에서 발표자와 무관하게
+  // 원하는 공정을 자유롭게 골라 볼 수 있어야 하므로(사용자 요청), 호스트는
+  // 7채널 전체의 이력을 매 틱 방송하고, 뷰어는 그 전체를 채널별로 담아둔다.
+  // 호스트에서는 이 변수들이 전혀 쓰이지 않는다(worstForChannel/
   // activeVisibleTrig가 IS_HOST일 땐 기존 계산 경로로 바로 빠지므로).
-  var viewerWorstByCh = {};
-  var viewerActiveAllTrig = null;
+  var viewerAllTrigByCh = {}; // { [channelId]: string[] } - 채널별 "즉시 판정 목록"
+  // 참석자가 탭/공정 버튼을 자기 손으로 한 번이라도 눌렀는지. 누르기 전까지는
+  // 발표자가 지금 보여주는 화면을 그대로 따라가고(기존 "완전 동기화" 느낌
+  // 유지), 한 번 누른 뒤로는 매 스냅샷마다 발표자 채널로 강제로 되돌리지
+  // 않는다 - applyBroadcastState 참고.
+  var viewerHasOwnSelection = false;
 
   // 채널 탭·공정 버튼·바로가기의 알람 점(뱃지)에 쓸 "그 채널의 가장 심각한
-  // 룰"을 구한다. 호스트는 기존 그대로 자기 chState를 직접 판정하고(모든
-  // 채널의 rawHistory 등 전체 이력을 들고 있으므로), 뷰어는 활성 채널
-  // 말고는 이력을 전혀 받지 않으므로(대역폭 절약을 위해 의도적으로 안 보냄)
-  // 대신 호스트가 방송한 채널별 요약 맵을 그대로 읽는다.
+  // 룰"을 구한다. 호스트는 기존 그대로 자기 chState를 직접 판정하고, 뷰어는
+  // 이제 7채널 전체의 allTrig를 받으므로 그중 지금 물어본 채널 것을 골라
+  // worstRule로 계산한다(예전처럼 별도로 방송되는 worstByCh 맵이 더는
+  // 필요 없다 - allTrig만 있으면 클라이언트에서 바로 유도 가능).
   function worstForChannel(cid){
-    if (!IS_HOST) return viewerWorstByCh[cid] || null;
+    if (!IS_HOST) return worstRule(viewerAllTrigByCh[cid] || []);
     return worstRule(visibleTrigFor(cid));
   }
-  // 지금 활성 채널의 "즉시 판정 목록"(상태 pill 문구·차트 알람 테두리·
-  // 확인칩 갱신에 쓰임) - 뷰어는 chState[activeCh]에 rawPrevTrig/
-  // chunkPrevTrig/reportedBatch 같은 판정 중간상태를 아예 갖고 있지 않으므로
-  // (히스토리 배열만 받음) 호스트가 이미 계산해 방송한 목록을 그대로 쓴다.
+  // 주어진 채널의 "즉시 판정 목록"(상태 pill 문구·차트 알람 테두리·확인칩
+  // 갱신에 쓰임) - 뷰어는 chState[id]에 rawPrevTrig/chunkPrevTrig/
+  // reportedBatch 같은 판정 중간상태를 아예 갖고 있지 않으므로(히스토리
+  // 배열만 받음) 호스트가 채널별로 이미 계산해 방송한 목록을 그대로 쓴다.
+  // 참석자가 발표자와 다른 채널을 보고 있을 수 있으므로 id는 항상 "지금
+  // 화면에 그리려는 채널"(render() 호출 시점의 state.activeCh)이어야 한다.
   function activeVisibleTrig(id){
-    if (!IS_HOST) return viewerActiveAllTrig || [];
+    if (!IS_HOST) return viewerAllTrigByCh[id] || [];
     return visibleTrigFor(id);
   }
 
   // ---------- 호스트: 압축 스냅샷 만들기 + 방송 ----------
-  // 페이로드는 의도적으로 작게 유지한다(RTDB 무료 티어 대역폭/동시접속 한도,
-  // 초당 1회 * 발표 시간 전체를 감당해야 함) - 7채널 전체가 아니라 "지금
-  // 보이는 화면(활성 채널)"의 그래프 데이터만, 나머지 채널은 뱃지 표시용
-  // 요약(가장 심각한 룰 하나)만 보낸다.
+  // 2026-09-23 개편: 참석자가 발표자 화면과 무관하게 자유롭게 공정을 선택할
+  // 수 있으려면, 참석자 쪽에 "지금 안 보이는 채널"의 이력도 있어야 한다 -
+  // 그래서 이제 7채널 전체의 그래프 데이터를 매 틱 방송한다(예전엔 활성
+  // 채널 1개 + 나머지는 뱃지용 요약만). MAX_RAW=160/MAX_CHUNK=60으로 배열이
+  // 이미 캡되어 있어 7채널 전체를 보내도 RTDB 무료 티어로 짧은 발표 시간
+  // 동안은 감당 가능한 크기다(요청 시점에 대역폭 재확인 완료).
   function buildBroadcastPayload(){
     var id = state.activeCh;
-    var s = chState[id];
 
-    var worstByCh = {};
+    var channelsOut = {};
     CHANNEL_IDS.forEach(function(cid){
-      var w = worstRule(visibleTrigFor(cid));
-      if (w) worstByCh[cid] = w;
+      var cs = chState[cid];
+      channelsOut[cid] = {
+        rawHistory: cs.rawHistory,
+        chunkHistory: cs.chunkHistory,
+        mrHistory: cs.mrHistory,
+        ewmaHistory: cs.ewmaHistory,
+        cpk: cs.cpk,
+        alerts: cs.alerts,
+        alertOpen: cs.alertOpen,
+        allTrig: visibleTrigFor(cid)
+      };
     });
 
     var manualInjectOut = {};
@@ -4100,19 +4147,9 @@
       locViolCount: state.locViolCount,
       mrViolCount: state.mrViolCount,
       lineMode: { loc: !!legendVisible.loc, ewma: !!legendVisible.ewma },
-      // 활성 채널의 "지금 화면에 그려야 하는" 데이터만 - 전체 7채널
-      // rawHistory를 매초 보내는 건 낭비다(사용자 요구사항).
-      active: {
-        rawHistory: s.rawHistory,
-        chunkHistory: s.chunkHistory,
-        mrHistory: s.mrHistory,
-        ewmaHistory: s.ewmaHistory,
-        cpk: s.cpk,
-        alerts: s.alerts,
-        alertOpen: s.alertOpen,
-        allTrig: visibleTrigFor(id)
-      },
-      worstByCh: worstByCh,
+      // 7채널 전체의 "지금 각자 화면에 그려야 하는" 데이터 (2026-09-23 개편 -
+      // 참석자별 자유 공정 선택을 위해 활성 채널 1개 → 전체로 확장).
+      channels: channelsOut,
       manualInject: manualInjectOut,
       varInject: varInjectOut,
       equipStop: equipStopOut,
@@ -4129,6 +4166,25 @@
     try {
       fbStateRef.set(buildBroadcastPayload()).catch(function(){ /* 네트워크 순간 장애 - 다음 틱에 다시 시도되므로 조용히 무시 */ });
     } catch (e) { /* SDK 자체가 없거나 오프라인이어도 로컬 데모는 계속되어야 한다 */ }
+  }
+
+  // ---------- 호스트: 실제 서버 연결 상태 감시 (2026-09-23 추가) ----------
+  // 위 broadcastState()의 실패는 지금까지 완전히 조용히 무시되고 있었다
+  // (다음 tick에 재시도하니 로컬 데모는 안 깨지지만, 발표자 본인은 몇 초짜리
+  // 네트워크 순단이 있었는지조차 알 방법이 없었다 - 실사용 중 발견된 문제).
+  // Firebase가 제공하는 특수 경로 .info/connected를 구독하면 SDK가 판단한
+  // "지금 실제로 서버에 붙어있는지" 여부를 그대로 알 수 있어, 끊긴 동안만
+  // 호스트 배지 옆에 경고를 띄운다. 뷰어 쪽 "연결 끊김" 판정(최근 스냅샷
+  // 없음)과는 독립적인, 호스트 자신을 위한 신호다.
+  function watchHostConnection(){
+    var warnEl = document.getElementById("hostConnWarn");
+    if (!warnEl) return;
+    try {
+      if (typeof firebase === "undefined" || !firebase.database) return;
+      firebase.database().ref(".info/connected").on("value", function(snap){
+        warnEl.hidden = (snap.val() === true);
+      });
+    } catch (e) { /* 감시 자체가 실패해도 로컬 데모·방송에는 영향 없음 */ }
   }
 
   // ---------- 뷰어: 상태 배지 ----------
@@ -4261,7 +4317,13 @@
   // 항상 기존 state/chState[id]의 "속성"만 덮어쓴다.
   function applyBroadcastState(data){
     if (!data) return;
-    state.activeCh = data.activeCh || state.activeCh;
+    // 2026-09-23 개편: 참석자가 아직 자기 손으로 탭/공정 버튼을 누른 적이
+    // 없을 때만 발표자 채널을 그대로 따라간다. 한 번이라도 직접 골랐다면
+    // (viewerHasOwnSelection === true) 그 선택을 존중하고, 매초 오는 새
+    // 스냅샷이 화면을 발표자 채널로 도로 끌고 가지 않게 한다.
+    if (!viewerHasOwnSelection){
+      state.activeCh = data.activeCh || state.activeCh;
+    }
     state.mode = data.mode || state.mode;
     state.tick = data.tick || 0;
     state.subTick = data.subTick || 0;
@@ -4274,20 +4336,23 @@
       legendVisible.ewma = !!data.lineMode.ewma;
     }
 
+    // 7채널 전체를 채워 넣는다 - 참석자가 지금 안 보고 있는 채널이라도
+    // 탭/공정 버튼을 누르는 순간 바로 자기 데이터로 그릴 수 있어야 한다.
+    var channelsIn = data.channels || {};
+    CHANNEL_IDS.forEach(function(cid){
+      var cs = chState[cid];
+      var b = channelsIn[cid] || {};
+      cs.rawHistory = b.rawHistory || [];
+      cs.chunkHistory = b.chunkHistory || [];
+      cs.mrHistory = b.mrHistory || [];
+      cs.ewmaHistory = b.ewmaHistory || [];
+      cs.cpk = (b.cpk === undefined) ? null : b.cpk;
+      cs.alerts = b.alerts || {};
+      cs.alertOpen = b.alertOpen || {};
+      viewerAllTrigByCh[cid] = b.allTrig || [];
+    });
+
     var id = state.activeCh;
-    var s = chState[id];
-    var a = data.active || {};
-    s.rawHistory = a.rawHistory || [];
-    s.chunkHistory = a.chunkHistory || [];
-    s.mrHistory = a.mrHistory || [];
-    s.ewmaHistory = a.ewmaHistory || [];
-    s.cpk = (a.cpk === undefined) ? null : a.cpk;
-    s.alerts = a.alerts || {};
-    s.alertOpen = a.alertOpen || {};
-    viewerActiveAllTrig = a.allTrig || [];
-
-    viewerWorstByCh = data.worstByCh || {};
-
     viewerShowChannelGroup(id);
     syncInjectionUiFromBroadcast(data);
 
@@ -4299,8 +4364,14 @@
   // 차지해야 레이아웃이 흔들리지 않는다는 이 파일의 기존 원칙(.seg
   // button:disabled 등, 위 CSS 주석 참고)을 그대로 따른다.
   function disableViewerControls(){
+    // 2026-09-23: .process-btn/.tab-btn/.shortcut-btn는 여기서 뺐다 - 참석자가
+    // 발표자와 무관하게 자기 폰에서 공정을 자유롭게 골라볼 수 있어야 한다는
+    // 요청(사용자 확정: "참석자가 자유롭게 공정 선택")에 따라, 이 세 종류는
+    // 더 이상 잠그지 않고 원래 클릭 핸들러(.tab-btn 리스너 등, 호스트와 완전히
+    // 같은 코드)를 그대로 탄다. 시뮬레이션 자체를 조작하는 버튼들(재생/속도/
+    // 초기화, 열화 주입 4종)은 여전히 발표자 전용이라 계속 잠근다 - 어차피
+    // 열화 주입 카드 4종은 위 CSS로 참석자 화면에서 아예 숨겨진다.
     [
-      ".process-btn", ".tab-btn", ".shortcut-btn",
       "#modeRawBtn", "#modeChunkBtn", "#modeMrBtn",
       ".speed-btn", "#playBtn", "#resetBtn",
       ".rule-inject-btn", ".manual-inject-btn", ".var-inject-btn",
@@ -4323,7 +4394,9 @@
     }
 
     var staleTimer = null;
-    var STALE_MS = 10000; // 요구사항: 최초 연결 후 ~10초간 새 스냅샷이 없으면 "연결 끊김"
+    // 2026-09-23: 실사용 중 잠깐(수 초)의 와이파이 순단으로도 "연결 끊김"이
+    // 뜬다는 보고가 있어, 너무 민감하게 반응하지 않도록 10초 → 15초로 완화.
+    var STALE_MS = 15000; // 최초 연결 후 ~15초간 새 스냅샷이 없으면 "연결 끊김"
     fbStateRef.on("value", function(snap){
       var data = snap.val();
       if (!data) return;
@@ -4356,6 +4429,7 @@
     // 알리는 작은 배지를 켠다.
     var hostBadgeEl = document.getElementById("hostBadge");
     if (hostBadgeEl) hostBadgeEl.hidden = false;
+    watchHostConnection();
     seed();
     startTimer();
   } else {
