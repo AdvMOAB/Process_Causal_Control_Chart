@@ -3216,6 +3216,10 @@
     if (state.mode !== "chunk") return;
     legendVisible.loc = newMode === "loc";
     legendVisible.ewma = newMode === "ewma";
+    // 2026-09-23: 참석자가 이 핸들러로 표시 계열을 직접 골랐다는 뜻이므로,
+    // 이후 스냅샷이 와도 legendVisible을 발표자 선택으로 강제로 되돌리지
+    // 않는다(applyBroadcastState 참고). 호스트에서는 그냥 no-op.
+    if (!IS_HOST) viewerLineModeHasOwnSelection = true;
     var locBtn = document.getElementById("lineModeLocBtn");
     var ewmaBtn = document.getElementById("lineModeEwmaBtn");
     if (locBtn) locBtn.classList.toggle("active", newMode === "loc");
@@ -3232,6 +3236,10 @@
   // 나머지 둘의 active 클래스를 지운다(항목4로 2-way에서 3-way로 확장).
   function setMode(newMode, btnEl){
     state.mode = newMode;
+    // 2026-09-23: 참석자가 이 핸들러로 보기 모드(초단위/청크/산포)를 직접
+    // 골랐다는 뜻이므로, 이후 스냅샷이 와도 화면을 발표자 모드로 강제로
+    // 되돌리지 않는다(applyBroadcastState 참고). 호스트에서는 그냥 no-op.
+    if (!IS_HOST) viewerModeHasOwnSelection = true;
     ["modeRawBtn", "modeChunkBtn", "modeMrBtn"].forEach(function(bid){
       var el = document.getElementById(bid);
       if (el) el.classList.toggle("active", el === btnEl);
@@ -4079,6 +4087,13 @@
   // 유지), 한 번 누른 뒤로는 매 스냅샷마다 발표자 채널로 강제로 되돌리지
   // 않는다 - applyBroadcastState 참고.
   var viewerHasOwnSelection = false;
+  // 2026-09-23(보기 모드 자유 선택 개편): 위 viewerHasOwnSelection과 같은
+  // 원리를 "채널 선택"이 아니라 "보기 모드"(초단위/청크·버킷/산포 MR)와
+  // "표시 계열"(실측값/EWMA)에도 각각 적용한다 - 참석자가 자기 폰에서 직접
+  // 고르기 전까지는 발표자 선택을 그대로 따라가고, 한 번 고른 뒤로는 매
+  // 스냅샷마다 발표자 선택으로 강제로 되돌리지 않는다 - applyBroadcastState 참고.
+  var viewerModeHasOwnSelection = false;
+  var viewerLineModeHasOwnSelection = false;
 
   // 채널 탭·공정 버튼·바로가기의 알람 점(뱃지)에 쓸 "그 채널의 가장 심각한
   // 룰"을 구한다. 호스트는 기존 그대로 자기 chState를 직접 판정하고, 뷰어는
@@ -4324,14 +4339,21 @@
     if (!viewerHasOwnSelection){
       state.activeCh = data.activeCh || state.activeCh;
     }
-    state.mode = data.mode || state.mode;
+    // 보기 모드도 채널 선택과 같은 원리: 참석자가 이미 자기 손으로 골랐다면
+    // (viewerModeHasOwnSelection === true) 매 스냅샷마다 발표자 모드로
+    // 강제로 되돌리지 않는다.
+    if (!viewerModeHasOwnSelection){
+      state.mode = data.mode || state.mode;
+    }
     state.tick = data.tick || 0;
     state.subTick = data.subTick || 0;
     state.locViolCount = data.locViolCount || 0;
     state.mrViolCount = data.mrViolCount || 0;
     state.log = data.log || [];
 
-    if (data.lineMode){
+    // 표시 계열(실측값/EWMA)도 마찬가지 - 참석자가 이미 직접 골랐다면
+    // (viewerLineModeHasOwnSelection === true) 발표자 선택으로 덮어쓰지 않는다.
+    if (data.lineMode && !viewerLineModeHasOwnSelection){
       legendVisible.loc = !!data.lineMode.loc;
       legendVisible.ewma = !!data.lineMode.ewma;
     }
@@ -4371,8 +4393,16 @@
     // 같은 코드)를 그대로 탄다. 시뮬레이션 자체를 조작하는 버튼들(재생/속도/
     // 초기화, 열화 주입 4종)은 여전히 발표자 전용이라 계속 잠근다 - 어차피
     // 열화 주입 카드 4종은 위 CSS로 참석자 화면에서 아예 숨겨진다.
+    // 2026-09-23(2차): #modeRawBtn/#modeChunkBtn/#modeMrBtn도 같은 이유로
+    // 여기서 뺐다 - 참석자가 보기 모드(초단위/청크·버킷/산포 MR)까지 자기
+    // 폰에서 자유롭게 골라볼 수 있어야 한다는 요청에 따라(setMode/
+    // viewerModeHasOwnSelection 참고). "실측값/EWMA"(#lineModeLocBtn/
+    // #lineModeEwmaBtn)는 원래부터 이 목록에 없었지만, setLineMode의
+    // state.mode!=="chunk" 가드 때문에 보기 모드가 발표자 값(청크가 아닌
+    // 모드)에 고정돼 있는 동안은 참석자가 눌러도 조용히 무시됐다 - 위
+    // 보기 모드 개편으로 참석자가 직접 청크 모드로 바꿀 수 있게 되면서
+    // 함께 정상 동작한다.
     [
-      "#modeRawBtn", "#modeChunkBtn", "#modeMrBtn",
       ".speed-btn", "#playBtn", "#resetBtn",
       ".rule-inject-btn", ".manual-inject-btn", ".var-inject-btn",
       "#varInjectRandomBtn", ".equip-stop-btn", "#editOcapBtn"
