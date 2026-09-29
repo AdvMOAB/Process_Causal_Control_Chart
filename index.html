@@ -3662,6 +3662,15 @@
         errorDemo.causeQueue = buildInjectionQueue(rule, CHANNEL_DEFS[ERROR_DEMO_CAUSE]);
         errorDemo.injectStartSubTick = pickErrorDemoInjectStart(errorDemo.outputQueue.length);
         errorDemo.injecting = false;
+        // 2026-09-29: 버튼을 누른 시점의 활성 화면이 우연히 공정 쪽(기본값
+        // 솔트컨베이어 등)이면, 재생이 끝나도 "오류 시연"의 진짜 주인공인
+        // 내폭 화면으로 넘어가지 않아 사용자가 그 결과를 직접 보지 못하고
+        // 공정 쪽(원인 후보) 화면만 계속 보게 되는 문제(사용자 요청)가 있었다.
+        // showOutputGroup은 📏내폭/📐외폭 바로가기 버튼과 완전히 같은 동작이라,
+        // 여기서 미리 호출해 재생 시작과 동시에 화면을 내폭으로 전환해둔다 -
+        // 참석자 화면도 (자기 손으로 채널을 고른 적이 없다면) 그대로 따라온다
+        // (applyBroadcastState의 viewerHasOwnSelection 가드 참고).
+        showOutputGroup(ERROR_DEMO_OUTPUT);
         var statusEl = document.getElementById("errorDemoStatus");
         if (statusEl) statusEl.textContent = rule + " 오류 시연 재생 중… (2시간 재생 중 내폭 + 솔트컨베이어에 발생)";
       },
