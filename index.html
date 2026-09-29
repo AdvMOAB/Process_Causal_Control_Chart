@@ -114,7 +114,7 @@
      올려 소스 순서와 무관하게 항상 이기도록 고쳤다. */
   .card.side-panel-card{ display:flex; flex-direction:column; gap:6px; padding:6px 9px; }
   .side-panel-group{ display:flex; flex-direction:column; gap:4px; }
-  .side-panel-label{ font-size:10.5px; font-weight:600; color:var(--ink-muted); padding-left:2px; }
+  .side-panel-label{ font-size:10.5px; font-weight:600; color:var(--ink-muted); padding-left:2px; text-align:center; }
   /* 2026-09-29: 배속(1x/10x/60x/240x) 세그를 제거하고, 그 자리를 "시연"
      버튼 하나 + 재생 중에만 나타나는 진행 표시줄로 대체했다(요청 - 배속
      선택 없이 시연 버튼 하나로 2시간 분량이 빠르게 채워지는 모습을 보여줌). */
@@ -287,7 +287,7 @@
      회색으로 보이게 남겨뒀는데, 카드 자체를 화면에서 지워 참석자 화면을
      더 간결하게 만든다(호스트 화면은 그대로 유지 - body에 viewer-mode
      클래스가 붙는 건 뷰어일 때뿐이다, initViewerMode 참고). */
-  body.viewer-mode .error-demo-card{ display:none; }
+  body.viewer-mode .error-demo-group{ display:none; }
 
   .card{
     background:var(--surface); border:1px solid var(--line); border-radius:14px;
@@ -551,13 +551,14 @@
      확정, 1차 AskUserQuestion "전부 교체"). 내폭(chi)과 그 P-FMEA 근거
      1차 원인 후보 공정인 솔트컨베이어(conveyor)에 무작위 룰(Rule1~5)을
      동시에 강제 발생시켜, 내폭 OCAP 팝업의 "원인 후보 공정" 섹션이 매번
-     확실히(우연이 아니라) 뜨도록 한다 - 구현은 var errorDemo 참고. */
-  .error-demo-card{ display:flex; flex-direction:column; gap:10px; }
-  .error-demo-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-  .error-demo-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
-  .error-demo-row{ display:grid; grid-template-columns: 1fr; gap:10px; }
-  .error-demo-row .btn.inject{ width:auto; }
-  .error-demo-status{ min-height:16px; font-weight:600; color:var(--ink-muted); }
+     확실히(우연이 아니라) 뜨도록 한다 - 구현은 var errorDemo 참고.
+     2026-09-29: 사이드바 "정상 시연" 버튼 바로 아래로 이동(요청) - 기존
+     .error-demo-card(본문 카드)는 삭제하고, 대신 사이드바 .side-panel-group
+     안에 .error-demo-group으로 넣었다. 뷰어(참석자) 화면에서 카드 전체를
+     숨기던 body.viewer-mode .error-demo-card 규칙도 .error-demo-group
+     기준으로 그대로 옮겨(위 방백 참고) 동일하게 숨김을 유지한다. */
+  .error-demo-group{ display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+  .error-demo-status{ min-height:16px; font-weight:600; color:var(--ink-muted); font-size:10.5px; text-align:center; }
 
   /* 기간별 보고서: 일간/주간/월간/연간 탭을 누르면 그 기간만큼(공정센서는
      4분 청크, 내폭·외폭은 1시간 버킷 기준) 더미 시뮬레이션을 즉시 앞당겨
@@ -1126,15 +1127,6 @@
     </div>
   </div>
 
-  <div class="card error-demo-card">
-    <h2>⚠️ 오류 시연 <span class="matrix-tag">내폭 + 원인 후보 공정(솔트컨베이어) 동시 발생</span></h2>
-    <p>"2시간 시연"과 같은 방식으로 2시간(7200서브틱) 분량을 약 15초에 빠르게 재생하되, 그 재생 도중 한 지점에서 판정 룰(Rule1~5) 중 하나가 무작위로 골라져 내폭(chi)과 그 P-FMEA 근거 1차 원인 후보 공정인 솔트컨베이어(conveyor)에 정확히 같은 룰이 동시에 발생합니다. 재생이 끝난 뒤 내폭 OCAP 팝업의 "🔎 원인 후보 공정" 섹션에서 솔트컨베이어가 함께 표시되는 것을 확인할 수 있습니다(우연이 아니라 버튼을 누를 때마다 매번 발생). 재생 동안에는 내폭·외폭도 공정센서와 같은 4분 청크 기준으로 전환됩니다.</p>
-    <div class="error-demo-row">
-      <button class="btn inject error-demo-btn" id="errorDemoBtn" type="button">⚠️ 오류 시연</button>
-    </div>
-    <p class="error-demo-status" id="errorDemoStatus"></p>
-  </div>
-
   <footer>
     5채널 파라미터는 1개월 시뮬레이션 데이터(v2, 2,592,000행) 실측 파일에서 직접 재계산한 값입니다(건조로 메시벨트속도 μ=1.197842·σ=0.014846 포함) · 실제 "솔트컨베이어 속도"(이슈8)는 태그 자체가 미수집이라 데이터가 없어, 실측 데이터가 있는 유일한 컨베이어/벨트 속도 변수인 건조로 메시벨트속도(이슈14)로 대체했습니다 · 규칙 1~4는 4.1 관리도선정 8단계 판정 규칙과 동일하며, 규칙 5(15점 밀집 ±1σ)는 기준서 정의를 이번 데모에 추가 구현했습니다 · Cpk는 표11 USL/LSL(내폭 24.987~25.013mm, 외폭 29.987~30.013mm) 기준, 공정센서는 4분 청크(240개 개별값), 내폭·외폭은 1시간 버킷(3600개 개별값) 구간에서 산출한 근사치입니다(기준서 v0.2.3 5.1.1/5.4.5) · 모든 채널의 CL/UCL/LCL은 2026-09-18 확정된 관리한계선 산정 기준(CL=평균값, UCL/LCL=CL±3×표준편차, 적용 전 왜도·첨도로 정규성 확인)을 적용했으며, 값은 「4.1_관리도선정_MVP_작업내역 1차.md」 10장의 잠정 CL/UCL/LCL 표와 동일합니다 · "산포(MR)" 모드는 위치 차트(I)와 짝을 이루는 산포 차트로, 연속된 두 청크/버킷 평균의 차(이동범위)에 같은 CL±3σ 관례를 적용했습니다(기준서 5.2 표15·5.5 표16 각주, 2026-09-21 항목4 반영) · MR은 이론상 반정규분포라 관리한계가 다소 근사치임에 유의하세요 · "오류 시연"은 판정 룰(Rule1~5) 중 하나를 무작위로 골라 내폭(chi)과 그 P-FMEA 근거 1차 원인 후보 공정인 솔트컨베이어(conveyor)에 동시에 발생시켜, 내폭 OCAP 팝업의 "원인 후보 공정" 섹션이 매번 확실히 뜨는 것을 보여줍니다(2026-09-29 반영, 기존 판정 룰 강제발생/공정별 열화 주입/분산 확대 주입/설비 정지-재가동 4종 버튼을 전부 대체) - 진행 중에는 내폭·외폭도 4분 청크 기준으로 잠시 전환됩니다 · "2시간 시연" 재생 중에는 내폭·외폭도 공정센서와 동일한 4분 청크 기준으로 일시 전환되어(σ·UCL/LCL도 그 기준에 맞춰 함께 바뀜) 점이 훨씬 자주 찍힙니다 - 실제 운영(실시간 1x)에서는 기준서 5.4.4/5.4.5대로 1시간 버킷 기준을 그대로 유지합니다(2026-09-29 반영)
   </footer>
@@ -1145,10 +1137,14 @@
   <div class="card side-panel-card">
     <div class="side-panel-group">
       <span class="side-panel-label" title="누르면 처음부터 다시 시작해, 2시간 분량 데이터가 전 채널에 빠르게 채워집니다. 시연 중에는 내폭·외폭도 공정센서처럼 4분 청크 기준으로 잠깐 전환되어(실제 운영은 1시간 버킷 그대로) 점이 훨씬 자주 찍히고, 산포(MR) 추세선까지 볼 수 있습니다.">시연</span>
-      <button id="demoRunBtn" class="btn demo-run-btn" type="button">▶ 2시간 시연</button>
+      <button id="demoRunBtn" class="btn demo-run-btn" type="button">정상 시연</button>
       <div class="demo-progress-row" id="demoProgressRow" hidden>
         <div class="demo-progress-track"><div class="demo-progress-fill" id="demoProgressFill"></div></div>
         <span class="demo-progress-label" id="demoProgressLabel">00:00 / 2:00:00</span>
+      </div>
+      <div class="error-demo-group" title="&quot;2시간 시연&quot;과 같은 방식으로 2시간(7200서브틱) 분량을 약 15초에 빠르게 재생하되, 그 재생 도중 한 지점에서 판정 룰(Rule1~5) 중 하나가 무작위로 골라져 내폭(chi)과 그 P-FMEA 근거 1차 원인 후보 공정인 솔트컨베이어(conveyor)에 정확히 같은 룰이 동시에 발생합니다. 재생이 끝난 뒤 내폭 OCAP 팝업의 &quot;원인 후보 공정&quot; 섹션에서 솔트컨베이어가 함께 표시되는 것을 확인할 수 있습니다.">
+        <button class="btn inject error-demo-btn" id="errorDemoBtn" type="button">오류 시연</button>
+        <p class="error-demo-status" id="errorDemoStatus"></p>
       </div>
     </div>
   </div>
