@@ -1004,7 +1004,7 @@
       <div class="channel-tabs-row" id="channelTabsRow">
         <div class="tab-group">
           <div class="tab-row">
-            <button class="tab-btn active" type="button" data-ch="conveyor">🌡️ 솔트컨베이어 존 온도<span class="dot-badge"></span></button>
+            <button class="tab-btn" type="button" data-ch="conveyor">🌡️ 솔트컨베이어 존 온도<span class="dot-badge"></span></button>
           </div>
         </div>
         <div class="tab-divider"></div>
@@ -1039,7 +1039,7 @@
                이동하므로, 별도 설명 라벨 없이도 아이콘·이름만으로 충분히
                구분된다는 판단(사용자 요청). -->
           <div class="tab-row">
-            <button class="tab-btn" type="button" data-ch="chi">📏 내폭<span class="dot-badge"></span></button>
+            <button class="tab-btn active" type="button" data-ch="chi">📏 내폭<span class="dot-badge"></span></button>
             <button class="tab-btn" type="button" data-ch="oe">📐 외폭<span class="dot-badge"></span></button>
           </div>
         </div>
@@ -1048,8 +1048,8 @@
     <div class="spacer"></div>
     <div class="mode-col">
       <div class="seg" id="modeUnitSeg" role="group" aria-label="측정 단위">
-        <button id="modeRawBtn" class="active" type="button">전체값</button>
-        <button id="modeChunkBtn" type="button">청크값</button>
+        <button id="modeRawBtn" type="button">전체값</button>
+        <button id="modeChunkBtn" class="active" type="button">청크값</button>
         <button id="modeMrBtn" type="button" title="위치 차트(I)와 짝을 이루는 산포 차트 - 연속된 두 청크/버킷 평균의 차(이동범위)">산포(MR)</button>
       </div>
       <!-- "실측값/EWMA" 표시 전환(요청 2026-09-22) - 기존 범례 오른쪽
@@ -1066,7 +1066,7 @@
         <!-- 요청 2026-09-22(16차): 원래 헤더 우측에 있던 내폭/외폭
              바로가기를 여기로 옮겨 "실측값" 세그 왼쪽에 붙였다. -->
         <div class="hdr-shortcuts" id="hdrShortcuts">
-          <button class="shortcut-btn" type="button" data-ch="chi">📏 내폭<span class="dot-badge"></span></button>
+          <button class="shortcut-btn active" type="button" data-ch="chi">📏 내폭<span class="dot-badge"></span></button>
           <button class="shortcut-btn" type="button" data-ch="oe">📐 외폭<span class="dot-badge"></span></button>
         </div>
         <div class="seg" role="group" aria-label="표시 계열" id="lineModeSeg">
@@ -1301,6 +1301,15 @@
   // 테스트 모드 규칙(2026-10-23까지 유효)으로, 클라이언트에 그대로 담아도
   // 되는 공개 설정값이다(비밀키 아님).
   var IS_HOST = /(?:^|[?&])host=1(?:&|$)/.test(location.search || "");
+  // 2026-09-29: 부팅 시퀀스가 기본 화면(채널/보기모드)을 프로그램적으로
+  // 세팅할 때 .click()/setMode()를 그대로 재사용하는데, 그 함수들 안의
+  // "참석자가 직접 골랐다"는 표시(viewerHasOwnSelection 등)가 부팅 중에도
+  // 똑같이 켜져버려서 - 실제로는 아무도 아무것도 고르지 않았는데도 -
+  // 참석자가 발표자 채널/모드 변경을 영영 따라가지 못하는 버그가 있었다
+  // (예: "오류 시연"이 발표자 화면을 내폭으로 자동 전환해도 참석자는
+  // 안 따라옴). 부팅이 끝날 때까지만 true로 두고 그 구간의 클릭/모드
+  // 호출은 "직접 고른 것"으로 치지 않는다 - 부팅 시퀀스 맨 끝에서 false로.
+  var isBootstrapping = true;
   var FIREBASE_CONFIG = {
     apiKey: "AIzaSyCSwONBU7iRg2CqlpbjMGUNQlXWtqth9zc",
     authDomain: "px-pbl.firebaseapp.com",
@@ -1471,9 +1480,13 @@
 
   // ---------- state ----------
   var state = {
-    mode: "raw",
+    // 2026-09-29: 기본 화면을 솔트컨베이어(공정3)에서 내폭(핵심 산출물)으로
+    // 변경(사용자 요청) - 보기 모드도 "전체값"(raw)이 아니라 "청크값"(chunk)이
+    // 기본이 되도록 함께 바꿨다. 아래쪽 부팅 코드(showOutputGroup 호출부)도
+    // 참고.
+    mode: "chunk",
     running: true,
-    activeCh: "conveyor",
+    activeCh: "chi",
     tick: 0,
     // subTick: "누적 시뮬레이션 초" 카운터. 청크/버킷 경계 판정과 정기 보고
     // (1시간) 경계 판정에 쓰인다. 2026-09-29 배속 개념 제거 이후 tick과
@@ -3385,7 +3398,7 @@
       // 2026-09-23: 참석자가 이 핸들러로 채널을 직접 골랐다는 뜻이므로,
       // 이후 스냅샷이 와도 화면을 발표자 채널로 강제로 되돌리지 않는다
       // (applyBroadcastState 참고). 호스트에서는 그냥 no-op.
-      if (!IS_HOST) viewerHasOwnSelection = true;
+      if (!IS_HOST && !isBootstrapping) viewerHasOwnSelection = true;
       // Each channel keeps its own alerts map (chState[id].alerts /
       // alertOpen), so switching tabs simply re-renders with that channel's
       // own unacknowledged alerts - renderAlerts() rebuilds the shared dock
@@ -3417,7 +3430,7 @@
     // 2026-09-23: 참석자가 이 핸들러로 표시 계열을 직접 골랐다는 뜻이므로,
     // 이후 스냅샷이 와도 legendVisible을 발표자 선택으로 강제로 되돌리지
     // 않는다(applyBroadcastState 참고). 호스트에서는 그냥 no-op.
-    if (!IS_HOST) viewerLineModeHasOwnSelection = true;
+    if (!IS_HOST && !isBootstrapping) viewerLineModeHasOwnSelection = true;
     var locBtn = document.getElementById("lineModeLocBtn");
     var ewmaBtn = document.getElementById("lineModeEwmaBtn");
     if (locBtn) locBtn.classList.toggle("active", newMode === "loc");
@@ -3437,7 +3450,7 @@
     // 2026-09-23: 참석자가 이 핸들러로 보기 모드(초단위/청크/산포)를 직접
     // 골랐다는 뜻이므로, 이후 스냅샷이 와도 화면을 발표자 모드로 강제로
     // 되돌리지 않는다(applyBroadcastState 참고). 호스트에서는 그냥 no-op.
-    if (!IS_HOST) viewerModeHasOwnSelection = true;
+    if (!IS_HOST && !isBootstrapping) viewerModeHasOwnSelection = true;
     ["modeRawBtn", "modeChunkBtn", "modeMrBtn"].forEach(function(bid){
       var el = document.getElementById(bid);
       if (el) el.classList.toggle("active", el === btnEl);
@@ -4645,9 +4658,11 @@
 
   // ================== /호스트/뷰어 실시간 동기화 ==================
 
-  // 초기 화면: 공정3(솔트컨베이어)부터 시작 - 기존 기본 활성 채널(conveyor)과 일치.
-  setActiveProcessBtn("p3");
-  applyProcessFilter("p3");
+  // 초기 화면: 내폭(핵심 산출물)부터 시작(2026-09-29, 사용자 요청 - 기존엔
+  // 공정3/솔트컨베이어가 기본이었다). showOutputGroup은 📏내폭 바로가기
+  // 버튼과 완전히 같은 동작이라 그대로 재사용 - 위 isBootstrapping 가드
+  // 덕분에 이 호출은 참석자의 "직접 선택"으로 잘못 기록되지 않는다.
+  showOutputGroup("chi");
 
   resizeCanvas();
   buildReportChartLegend();
@@ -4671,6 +4686,10 @@
     // 관중 화면 - 자기 시뮬레이션은 전혀 시작하지 않고, 발표자 스냅샷만 구독한다.
     initViewerMode();
   }
+  // 부팅 시퀀스(위 showOutputGroup 호출 등)가 모두 끝났다 - 이제부터의
+  // 클릭/모드 변경은 전부 실제 사용자 조작이므로 정상적으로 "직접 선택"
+  // 표시가 켜지도록 가드를 해제한다.
+  isBootstrapping = false;
 })();
 </script>
 
