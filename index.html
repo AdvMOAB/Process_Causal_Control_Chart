@@ -287,10 +287,7 @@
      회색으로 보이게 남겨뒀는데, 카드 자체를 화면에서 지워 참석자 화면을
      더 간결하게 만든다(호스트 화면은 그대로 유지 - body에 viewer-mode
      클래스가 붙는 건 뷰어일 때뿐이다, initViewerMode 참고). */
-  body.viewer-mode .rule-inject-card,
-  body.viewer-mode .manual-inject-card,
-  body.viewer-mode .var-inject-card,
-  body.viewer-mode .equip-stop-card{ display:none; }
+  body.viewer-mode .error-demo-card{ display:none; }
 
   .card{
     background:var(--surface); border:1px solid var(--line); border-radius:14px;
@@ -549,14 +546,18 @@
   .inject-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; }
   .inject-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; flex:1 1 auto; }
 
-  .rule-inject-card{ display:flex; flex-direction:column; gap:10px; }
-  .rule-inject-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-  .rule-inject-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
-  .rule-inject-row{ display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; }
-  @media (max-width: 860px){ .rule-inject-row{ grid-template-columns: repeat(3, 1fr); } }
-  @media (max-width: 560px){ .rule-inject-row{ grid-template-columns: repeat(2, 1fr); } }
-  .rule-inject-row .btn.inject{ width:auto; }
-  .rule-inject-status{ min-height:16px; font-weight:600; color:var(--ink-muted); }
+  /* 2026-09-29: 판정 룰 강제발생/공정별 수동 열화 주입/분산 확대 주입/설비
+     정지-재가동 4종 카드를 "오류 시연" 단일 버튼 카드로 전부 교체(사용자
+     확정, 1차 AskUserQuestion "전부 교체"). 내폭(chi)과 그 P-FMEA 근거
+     1차 원인 후보 공정인 솔트컨베이어(conveyor)에 무작위 룰(Rule1~5)을
+     동시에 강제 발생시켜, 내폭 OCAP 팝업의 "원인 후보 공정" 섹션이 매번
+     확실히(우연이 아니라) 뜨도록 한다 - 구현은 var errorDemo 참고. */
+  .error-demo-card{ display:flex; flex-direction:column; gap:10px; }
+  .error-demo-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .error-demo-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
+  .error-demo-row{ display:grid; grid-template-columns: 1fr; gap:10px; }
+  .error-demo-row .btn.inject{ width:auto; }
+  .error-demo-status{ min-height:16px; font-weight:600; color:var(--ink-muted); }
 
   /* 기간별 보고서: 일간/주간/월간/연간 탭을 누르면 그 기간만큼(공정센서는
      4분 청크, 내폭·외폭은 1시간 버킷 기준) 더미 시뮬레이션을 즉시 앞당겨
@@ -594,67 +595,7 @@
   .report-table tbody tr:last-child td{ border-bottom:none; }
   .report-status{ min-height:16px; font-size:12px; color:var(--ink-muted); }
 
-  /* 공정별 열화 주입(수동): 위 "판정 룰 강제 발생"과 달리 대상 공정을
-     미리 알고 사용자가 직접 골라서 켜는 기능. 화면 맨 아래, 5개 공정
-     버튼과 같은 순서로 나열하고, 오른쪽 끝에 내폭/외폭 전용 버튼 2개를
-     같은 줄에 이어 붙인다(총 7개) - 기존 5개 버튼 폭을 좁혀 한 줄에
-     들어가게 한다. */
-  .manual-inject-card{ display:flex; flex-direction:column; gap:10px; }
-  .manual-inject-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-  .manual-inject-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
-  .manual-inject-row{ display:grid; grid-template-columns: repeat(7, 1fr); gap:8px; }
-  @media (max-width: 1000px){ .manual-inject-row{ grid-template-columns: repeat(4, 1fr); } }
-  @media (max-width: 620px){ .manual-inject-row{ grid-template-columns: repeat(2, 1fr); } }
-  .manual-inject-row .btn.inject{ width:auto; padding:9px 8px; font-size:12px; }
-  /* 내폭/외폭 버튼(6·7번째)은 공정 5개와 시각적으로 구분되게 왼쪽에 얇은
-     구분선을 둔다 - 좁은 화면에서 줄바꿈되면 구분선은 의미가 없어져 뺀다. */
-  .manual-inject-row .btn.inject:nth-child(6){ border-left:2px solid rgba(255,255,255,.55); }
-  @media (max-width: 1000px){ .manual-inject-row .btn.inject:nth-child(6){ border-left:none; } }
-  /* 요청 2026-09-22(15차): 60틱 다 채우지 않고 재클릭으로 즉시 중단할 수
-     있어야 한다는 요구사항. 처음엔 --accent(파란색)로 구분했으나 사용자가
-     "이전 버전 색"(주입 중 disabled+opacity:.55로 옅어 보이던 빨간색)을
-     선호해 원래 느낌으로 되돌림 - 배경색 자체는 그대로 두고 옅게만
-     만든다. 단, 이번엔 버튼이 계속 클릭 가능해야 하므로 :disabled는 쓰지
-     않고 opacity만 낮춘다(클릭 가능 상태 유지). */
-  .manual-inject-row .btn.inject.injecting{ opacity:.55; }
-
-  /* 항목6(2026-09-21): 분산(산포) 확대 주입 - 위 "공정별 열화 주입"과 달리
-     평균은 그대로 두고 노이즈만 증폭한다. 기준서 5.6절 매트릭스의 "산포
-     확대(MR 계열) → 즉시 공정엔지니어 개입·보정 보류" 행 전용 시연 기능 -
-     항목4(MR 산포차트)가 있어야 이 버튼의 효과가 화면에 드러나므로 그 뒤에
-     구현한다. 무작위 채널 버튼 + 채널별 수동 버튼을 한 카드에 같이 둔다
-     (사용자 확정, 2026-09-21). */
-  .var-inject-card{ display:flex; flex-direction:column; gap:10px; }
-  .var-inject-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .matrix-tag{ font-size:10.5px; font-weight:600; color:var(--ink-muted); background:var(--surface-2); border:1px solid var(--line); border-radius:999px; padding:2px 9px; white-space:nowrap; }
-  .var-inject-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
-  .var-inject-row{ display:grid; grid-template-columns: repeat(7, 1fr); gap:8px; }
-  .var-inject-row.var-inject-random-row{ grid-template-columns: 1fr; }
-  @media (max-width: 1000px){ .var-inject-row{ grid-template-columns: repeat(4, 1fr); } }
-  @media (max-width: 620px){ .var-inject-row{ grid-template-columns: repeat(2, 1fr); } }
-  .var-inject-row .btn.inject{ width:auto; padding:9px 8px; font-size:12px; }
-  .var-inject-row .btn.inject:nth-child(6){ border-left:2px solid rgba(255,255,255,.55); }
-  @media (max-width: 1000px){ .var-inject-row .btn.inject:nth-child(6){ border-left:none; } }
-  /* 요청 2026-09-22(15차): 위 공정별 열화 주입과 동일하게 재클릭 중단
-     지원 + 동일한 이유로 opacity 기반 옅은 색으로 통일. */
-  .var-inject-row .btn.inject.injecting{ opacity:.55; }
-  .var-inject-status{ min-height:16px; font-weight:600; color:var(--ink-muted); }
-
-  /* 항목10(2026-09-21): 설비 정지/재가동 - 위 두 주입 카드와 같은 7열
-     그리드를 재사용한다. "정지됨" 상태는 다른 두 카드의 "진행 중" 버튼과
-     구분되게 빨간색(--crit) 계열 대신 중립색(--ink-muted)으로 눌러
-     "경고"가 아니라 "일시 중단"이라는 의미 차이를 색으로도 드러낸다. */
-  .equip-stop-card{ display:flex; flex-direction:column; gap:10px; }
-  .equip-stop-card h2{ margin:0; font-size:13.5px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-  .equip-stop-card p{ margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
-  .equip-stop-row{ display:grid; grid-template-columns: repeat(7, 1fr); gap:8px; }
-  @media (max-width: 1000px){ .equip-stop-row{ grid-template-columns: repeat(4, 1fr); } }
-  @media (max-width: 620px){ .equip-stop-row{ grid-template-columns: repeat(2, 1fr); } }
-  .equip-stop-row .btn.inject{ width:auto; padding:9px 8px; font-size:12px; background:var(--ink-muted); border-color:var(--ink-muted); }
-  .equip-stop-row .btn.inject:nth-child(6){ border-left:2px solid rgba(255,255,255,.55); }
-  @media (max-width: 1000px){ .equip-stop-row .btn.inject:nth-child(6){ border-left:none; } }
-  .equip-stop-row .btn.inject.stopped{ background:var(--crit); border-color:var(--crit); }
-  .equip-stop-status{ min-height:16px; font-weight:600; color:var(--ink-muted); }
 
   .stats-card{ padding:14px 14px 14px; }
   .stats-bar{ display:grid; grid-template-columns: repeat(5, 1fr); gap:14px; }
@@ -967,9 +908,6 @@
     .tab-btn{ padding-top:13px; padding-bottom:13px; }
     .shortcut-btn{ padding-top:13px; padding-bottom:13px; }
     .seg button{ padding-top:13px; padding-bottom:13px; }
-    .manual-inject-row .btn.inject,
-    .var-inject-row .btn.inject,
-    .equip-stop-row .btn.inject{ padding-top:13px; padding-bottom:13px; }
   }
 
   /* 6) .tabs-card: 900px 이하에서는 이미 세로 flex로 바뀌어 공정1~5 행 ·
@@ -1188,68 +1126,17 @@
     </div>
   </div>
 
-  <div class="card rule-inject-card">
-    <h2>⚡ 판정 룰 강제 발생 <span class="matrix-tag">스텝 시프트 → Rule1(즉시 보정)</span></h2>
-    <p>버튼을 누르면 7개 채널(공정1~5 + 내폭·외폭) 중 무작위로 하나가 골라져 그 룰이 발생합니다. 발생한 공정은 위 공정 버튼의 점(뱃지)으로 바로 표시됩니다. Rule1 버튼이 기준서 5.6절 매트릭스의 "스텝 시프트(관리한계 이탈) → 즉시 보정·즉시 알람" 행에 해당하며, Rule2~5는 같은 무작위 주입 방식을 다른 판정 패턴으로 확장한 테스트용 버튼입니다.</p>
-    <div class="rule-inject-row">
-      <button class="btn inject rule-inject-btn" type="button" data-rule="Rule1">Rule1 발생</button>
-      <button class="btn inject rule-inject-btn" type="button" data-rule="Rule2">Rule2 발생</button>
-      <button class="btn inject rule-inject-btn" type="button" data-rule="Rule3">Rule3 발생</button>
-      <button class="btn inject rule-inject-btn" type="button" data-rule="Rule4">Rule4 발생</button>
-      <button class="btn inject rule-inject-btn" type="button" data-rule="Rule5">Rule5 발생</button>
+  <div class="card error-demo-card">
+    <h2>⚠️ 오류 시연 <span class="matrix-tag">내폭 + 원인 후보 공정(솔트컨베이어) 동시 발생</span></h2>
+    <p>버튼을 누르면 판정 룰(Rule1~5) 중 하나가 무작위로 골라져, 내폭(chi)과 그 P-FMEA 근거 1차 원인 후보 공정인 솔트컨베이어(conveyor)에 정확히 같은 룰이 동시에 발생합니다. 내폭 OCAP 팝업의 "🔎 원인 후보 공정" 섹션에서 솔트컨베이어가 함께 표시되는 것을 확인할 수 있습니다(우연이 아니라 버튼을 누를 때마다 매번 발생). 진행 중에는 내폭·외폭도 공정센서와 같은 4분 청크 기준으로 잠시 전환되며, 완료 즉시 실제 운영 기준인 1시간 버킷으로 자동 복귀합니다.</p>
+    <div class="error-demo-row">
+      <button class="btn inject error-demo-btn" id="errorDemoBtn" type="button">⚠️ 오류 시연</button>
     </div>
-    <p class="rule-inject-status" id="ruleInjectStatus"></p>
-  </div>
-
-  <div class="card manual-inject-card">
-    <h2>🔧 공정별 열화 주입 (수동) <span class="matrix-tag">완만한 드리프트 → CUSUM·EWMA(보정 예고)</span></h2>
-    <p>위 "판정 룰 강제 발생"과 달리, 원하는 공정을 직접 골라 그 채널에 열화를 주입합니다. 22틱에 걸쳐 평균이 서서히 이동하는 완만한 드리프트 형태로, 기준서 5.6절 매트릭스의 "추세(CUSUM/EWMA) → 보정 예고·정기 보고" 행을 시연합니다(단, 실제 판정은 지금 구현된 Rule1~5 런 규칙으로 잡습니다 - CUSUM/EWMA 알고리즘 자체는 아직 별도 구현되지 않았습니다, 갭 문서 참고). 인과관계로 연결된 공정(솔트조→외폭, 솔트컨베이어→내폭)은 그 영향이 결과 채널로 그대로 전파되는 것도 함께 볼 수 있습니다.</p>
-    <div class="manual-inject-row">
-      <button class="btn inject manual-inject-btn" type="button" data-ch="hardening">1 소입로</button>
-      <button class="btn inject manual-inject-btn" type="button" data-ch="salt">2 솔트조</button>
-      <button class="btn inject manual-inject-btn" type="button" data-ch="conveyor">3 솔트컨베이어</button>
-      <button class="btn inject manual-inject-btn" type="button" data-ch="wash">4 세정기</button>
-      <button class="btn inject manual-inject-btn" type="button" data-ch="belt">5 건조로</button>
-      <button class="btn inject manual-inject-btn" type="button" data-ch="chi">📏 내폭</button>
-      <button class="btn inject manual-inject-btn" type="button" data-ch="oe">📐 외폭</button>
-    </div>
-  </div>
-
-  <div class="card var-inject-card">
-    <h2>📊 분산(산포) 확대 주입 <span class="matrix-tag">분산 확대 → 산포 차트 이탈(보정 보류·엔지니어 개입)</span></h2>
-    <p>위 두 기능과 달리 평균(위치)은 그대로 두고 노이즈만 일시적으로 1.5배 키웁니다 — 기준서 5.6절 매트릭스의 "산포 확대(MR 계열) → 즉시 공정엔지니어 개입·보정 보류" 행 전용 시연입니다. 위치(I) 차트는 상대적으로 덜 흔들리고 산포(MR) 차트가 더 잘 반응하는 대비를 확인해 보세요(단, 노이즈를 키우는 방식이라 위치 차트도 완전히 무반응은 아닙니다 - 판정 임계값이 증폭 전 σ 기준으로 고정돼 있어 위치·산포 양쪽 다 평소보다 이탈 확률이 오르되, 산포 쪽이 더 잘 반응하도록 배율을 낮춰 잡았습니다).</p>
-    <div class="var-inject-row var-inject-random-row">
-      <button class="btn inject var-inject-random-btn" id="varInjectRandomBtn" type="button">🔀 무작위 채널에 분산 확대 발생</button>
-    </div>
-    <p class="var-inject-status" id="varInjectStatus"></p>
-    <div class="var-inject-row">
-      <button class="btn inject var-inject-btn" type="button" data-ch="hardening">1 소입로</button>
-      <button class="btn inject var-inject-btn" type="button" data-ch="salt">2 솔트조</button>
-      <button class="btn inject var-inject-btn" type="button" data-ch="conveyor">3 솔트컨베이어</button>
-      <button class="btn inject var-inject-btn" type="button" data-ch="wash">4 세정기</button>
-      <button class="btn inject var-inject-btn" type="button" data-ch="belt">5 건조로</button>
-      <button class="btn inject var-inject-btn" type="button" data-ch="chi">📏 내폭</button>
-      <button class="btn inject var-inject-btn" type="button" data-ch="oe">📐 외폭</button>
-    </div>
-  </div>
-
-  <div class="card equip-stop-card">
-    <h2>🛑 설비 정지 / 재가동 <span class="matrix-tag">설비 정지 → 데이터 생성 중단·자동보정 보류 · 재가동 → 런 카운트 초기화</span></h2>
-    <p>채널별로 "설비가 잠시 멈춘 상황"을 시연합니다. 정지 중에는 그 채널의 값 생성이 완전히 멈추고(차트가 그 자리에서 멈춤) 자동보정도 보류됩니다. 다시 "재가동"을 누르면 정지 전 이력을 전부 지우고 런(연속) 카운트를 0부터 새로 셉니다 - 정지 직전까지 쌓여있던 연속 이탈이 재가동 후 값과 이어져 엉뚱하게 Rule2~5가 즉시 발동하는 것을 막기 위함입니다(위 두 주입 기능과 마찬가지로 7개 채널은 서로 독립적으로 켜고 끌 수 있습니다).</p>
-    <p class="equip-stop-status" id="equipStopStatus"></p>
-    <div class="equip-stop-row">
-      <button class="btn inject equip-stop-btn" type="button" data-ch="hardening">1 소입로</button>
-      <button class="btn inject equip-stop-btn" type="button" data-ch="salt">2 솔트조</button>
-      <button class="btn inject equip-stop-btn" type="button" data-ch="conveyor">3 솔트컨베이어</button>
-      <button class="btn inject equip-stop-btn" type="button" data-ch="wash">4 세정기</button>
-      <button class="btn inject equip-stop-btn" type="button" data-ch="belt">5 건조로</button>
-      <button class="btn inject equip-stop-btn" type="button" data-ch="chi">📏 내폭</button>
-      <button class="btn inject equip-stop-btn" type="button" data-ch="oe">📐 외폭</button>
-    </div>
+    <p class="error-demo-status" id="errorDemoStatus"></p>
   </div>
 
   <footer>
-    5채널 파라미터는 1개월 시뮬레이션 데이터(v2, 2,592,000행) 실측 파일에서 직접 재계산한 값입니다(건조로 메시벨트속도 μ=1.197842·σ=0.014846 포함) · 실제 "솔트컨베이어 속도"(이슈8)는 태그 자체가 미수집이라 데이터가 없어, 실측 데이터가 있는 유일한 컨베이어/벨트 속도 변수인 건조로 메시벨트속도(이슈14)로 대체했습니다 · 규칙 1~4는 4.1 관리도선정 8단계 판정 규칙과 동일하며, 규칙 5(15점 밀집 ±1σ)는 기준서 정의를 이번 데모에 추가 구현했습니다 · Cpk는 표11 USL/LSL(내폭 24.987~25.013mm, 외폭 29.987~30.013mm) 기준, 공정센서는 4분 청크(240개 개별값), 내폭·외폭은 1시간 버킷(3600개 개별값) 구간에서 산출한 근사치입니다(기준서 v0.2.3 5.1.1/5.4.5) · 모든 채널의 CL/UCL/LCL은 2026-09-18 확정된 관리한계선 산정 기준(CL=평균값, UCL/LCL=CL±3×표준편차, 적용 전 왜도·첨도로 정규성 확인)을 적용했으며, 값은 「4.1_관리도선정_MVP_작업내역 1차.md」 10장의 잠정 CL/UCL/LCL 표와 동일합니다 · "산포(MR)" 모드는 위치 차트(I)와 짝을 이루는 산포 차트로, 연속된 두 청크/버킷 평균의 차(이동범위)에 같은 CL±3σ 관례를 적용했습니다(기준서 5.2 표15·5.5 표16 각주, 2026-09-21 항목4 반영) · MR은 이론상 반정규분포라 관리한계가 다소 근사치임에 유의하세요 · "분산(산포) 확대 주입"은 평균은 그대로 두고 노이즈만 1.5배로 일시 증폭해 기준서 5.6절의 "산포 확대(MR 계열) → 즉시 공정엔지니어 개입" 행을 시연합니다(2026-09-21 항목6 반영) - 판정 임계값이 증폭 전 σ 기준으로 고정돼 있어 위치(I) 차트도 낮은 확률로 함께 반응할 수 있습니다
+    5채널 파라미터는 1개월 시뮬레이션 데이터(v2, 2,592,000행) 실측 파일에서 직접 재계산한 값입니다(건조로 메시벨트속도 μ=1.197842·σ=0.014846 포함) · 실제 "솔트컨베이어 속도"(이슈8)는 태그 자체가 미수집이라 데이터가 없어, 실측 데이터가 있는 유일한 컨베이어/벨트 속도 변수인 건조로 메시벨트속도(이슈14)로 대체했습니다 · 규칙 1~4는 4.1 관리도선정 8단계 판정 규칙과 동일하며, 규칙 5(15점 밀집 ±1σ)는 기준서 정의를 이번 데모에 추가 구현했습니다 · Cpk는 표11 USL/LSL(내폭 24.987~25.013mm, 외폭 29.987~30.013mm) 기준, 공정센서는 4분 청크(240개 개별값), 내폭·외폭은 1시간 버킷(3600개 개별값) 구간에서 산출한 근사치입니다(기준서 v0.2.3 5.1.1/5.4.5) · 모든 채널의 CL/UCL/LCL은 2026-09-18 확정된 관리한계선 산정 기준(CL=평균값, UCL/LCL=CL±3×표준편차, 적용 전 왜도·첨도로 정규성 확인)을 적용했으며, 값은 「4.1_관리도선정_MVP_작업내역 1차.md」 10장의 잠정 CL/UCL/LCL 표와 동일합니다 · "산포(MR)" 모드는 위치 차트(I)와 짝을 이루는 산포 차트로, 연속된 두 청크/버킷 평균의 차(이동범위)에 같은 CL±3σ 관례를 적용했습니다(기준서 5.2 표15·5.5 표16 각주, 2026-09-21 항목4 반영) · MR은 이론상 반정규분포라 관리한계가 다소 근사치임에 유의하세요 · "오류 시연"은 판정 룰(Rule1~5) 중 하나를 무작위로 골라 내폭(chi)과 그 P-FMEA 근거 1차 원인 후보 공정인 솔트컨베이어(conveyor)에 동시에 발생시켜, 내폭 OCAP 팝업의 "원인 후보 공정" 섹션이 매번 확실히 뜨는 것을 보여줍니다(2026-09-29 반영, 기존 판정 룰 강제발생/공정별 열화 주입/분산 확대 주입/설비 정지-재가동 4종 버튼을 전부 대체) - 진행 중에는 내폭·외폭도 4분 청크 기준으로 잠시 전환됩니다 · "2시간 시연" 재생 중에는 내폭·외폭도 공정센서와 동일한 4분 청크 기준으로 일시 전환되어(σ·UCL/LCL도 그 기준에 맞춰 함께 바뀜) 점이 훨씬 자주 찍힙니다 - 실제 운영(실시간 1x)에서는 기준서 5.4.4/5.4.5대로 1시간 버킷 기준을 그대로 유지합니다(2026-09-29 반영)
   </footer>
 
 </div>
@@ -1257,7 +1144,7 @@
 <aside class="side-panel" id="sidePanel">
   <div class="card side-panel-card">
     <div class="side-panel-group">
-      <span class="side-panel-label" title="누르면 처음부터 다시 시작해, 내폭·외폭 1시간 버킷이 2개(=2시간 분량) 쌓일 때까지 전 채널 데이터가 화면에 빠르게 채워집니다 - 산포(MR) 차트의 첫 값이 뜨는 순간까지 볼 수 있습니다.">시연</span>
+      <span class="side-panel-label" title="누르면 처음부터 다시 시작해, 2시간 분량 데이터가 전 채널에 빠르게 채워집니다. 시연 중에는 내폭·외폭도 공정센서처럼 4분 청크 기준으로 잠깐 전환되어(실제 운영은 1시간 버킷 그대로) 점이 훨씬 자주 찍히고, 산포(MR) 추세선까지 볼 수 있습니다.">시연</span>
       <button id="demoRunBtn" class="btn demo-run-btn" type="button">▶ 2시간 시연</button>
       <div class="demo-progress-row" id="demoProgressRow" hidden>
         <div class="demo-progress-track"><div class="demo-progress-fill" id="demoProgressFill"></div></div>
@@ -1534,6 +1421,54 @@
     c.mrSigma = c.chunkSigma * Math.sqrt(2 * (1 - 2 / Math.PI));
   });
 
+  // ---------- 시연 전용 내폭/외폭 4분 청크 오버라이드 (2026-09-29) ----------
+  // 실제 운영(실시간 1x)은 기준서 5.4.4/5.4.5대로 내폭·외폭=1시간 버킷을
+  // 계속 지킨다 - 이건 "점이 안 찍힌다"고 바꿔달라는 요청에도 절대 바뀌지
+  // 않는다(사용자 확정, 2026-09-29: "시연 버튼에만 적용, 기준서 유지").
+  // 대신 "2시간 시연" 애니메이션 동안만 내폭·외폭도 공정센서와 똑같은
+  // 4분/240샘플 청크 창으로 임시 전환해 점을 훨씬 자주 찍히게 한다. 창
+  // 크기만 줄이고 σ·관리한계(UCL/LCL)는 그대로 두면, 실제로는 정상 변동인
+  // 점들이 (더 좁은 창=더 큰 표준오차인데 기존의 좁은 1시간 버킷 기준
+  // 관리한계를 그대로 쓰는 바람에) 전부 관리한계 밖으로 튀어나가 보이는
+  // 통계적 오류가 생긴다 - 그래서 σ·MR 평균/표준편차도 4분 청크 창 기준으로
+  // 같이 다시 계산해 별도로 들고 있다가, 시연 중에는 CHANNEL_DEFS의 "현재
+  // 쓰는" 필드(aggSamples/chunkSigma/mrMu/mrSigma)를 이 값으로 바꿔치기한다.
+  var outputDemoAggActive = false;
+  CHANNEL_IDS.forEach(function(id){
+    var c = CHANNEL_DEFS[id];
+    if (OUTPUT_CHANNELS.indexOf(id) === -1) return;
+    c.realAggSamples = c.aggSamples;
+    c.realChunkSigma = c.chunkSigma;
+    c.realMrMu = c.mrMu;
+    c.realMrSigma = c.mrSigma;
+    c.demoAggSamples = SENSOR_CHUNK_SAMPLES;
+    c.demoChunkSigma = c.rawSigma / Math.sqrt(c.demoAggSamples);
+    c.demoMrMu = c.demoChunkSigma * (2 / Math.sqrt(Math.PI));
+    c.demoMrSigma = c.demoChunkSigma * Math.sqrt(2 * (1 - 2 / Math.PI));
+  });
+  // active=true → 내폭·외폭도 4분 청크 기준(시연용)으로 전환.
+  // active=false → 기준서 그대로인 1시간 버킷 기준(실제 운영)으로 복원.
+  // 호스트에서 이 상태가 바뀔 때마다 buildBroadcastPayload()가 함께 실어
+  // 보내고, 참석자(뷰어) 쪽 applyBroadcastState()가 받아서 자기 화면에도
+  // 똑같이 적용한다 - 그래야 참석자 화면의 UCL/LCL도 호스트와 항상 일치한다.
+  function setOutputDemoAggActive(active){
+    outputDemoAggActive = !!active;
+    OUTPUT_CHANNELS.forEach(function(id){
+      var c = CHANNEL_DEFS[id];
+      if (outputDemoAggActive){
+        c.aggSamples = c.demoAggSamples;
+        c.chunkSigma = c.demoChunkSigma;
+        c.mrMu = c.demoMrMu;
+        c.mrSigma = c.demoMrSigma;
+      } else {
+        c.aggSamples = c.realAggSamples;
+        c.chunkSigma = c.realChunkSigma;
+        c.mrMu = c.realMrMu;
+        c.mrSigma = c.realMrSigma;
+      }
+    });
+  }
+
   // ---------- state ----------
   var state = {
     mode: "raw",
@@ -1553,22 +1488,27 @@
     log: []
   };
 
-  // ---------- 판정 룰 강제 발생(무작위 채널) ----------
-  // 기존 "특정 공정에 서서히 평균이동을 주입" 방식을 완전히 대체한다. 이제는
-  // 사용자가 룰(1~5) 자체를 지정하면, 7개 채널(공정1~5의 고유 변수 + 내폭·
-  // 외폭) 중 하나가 무작위로 골라져 그 채널의 원시값(raw)이 해당 룰의 판정
-  // 조건을 정확히 만족하는 값 시퀀스로 강제 대체된다. 대상 채널을 미리
-  // 알려주지는 않지만, 룰이 실제로 발생하면 그 채널이 속한 공정 버튼의
-  // 알람 점(뱃지)이 즉시 켜져 어디서 발생했는지 바로 알 수 있다(render()의
-  // CHANNEL_IDS.forEach 알람 동기화 참고) - "무작위지만 발생 즉시 위치는
-  // 알 수 있는" 훈련용 설계.
-  var ruleInject = { active: false, chId: null, rule: null, queue: [] };
+  // ---------- 오류 시연(2026-09-29): 4종 개별 주입 버튼 → 단일 버튼 ----------
+  // 기존 "판정 룰 강제 발생(무작위 채널)/공정별 열화 주입(수동)/분산(산포)
+  // 확대 주입/설비 정지-재가동" 4종을 전부 대체한다(사용자 확정, 1차
+  // AskUserQuestion "전부 교체"). 새 요구사항은 "'오류 시연'을 누르면
+  // 내폭(chi)에서 원인 후보 공정이 뜨는 이슈를 무작위로, 하지만 매번
+  // 확실히(우연이 아니라) 발생시킨다"는 것 - 아래 buildInjectionQueue로
+  // 내폭(chi)과 그 P-FMEA 근거 1차 원인 후보 공정인 솔트컨베이어(conveyor)
+  // 양쪽에 정확히 같은 룰·같은 길이의 원시값 시퀀스를 만들어 매 서브틱
+  // 동시에 하나씩 강제 주입한다(아래 errorDemo/ERROR_DEMO_* 참고).
+  var ERROR_DEMO_OUTPUT = "chi";
+  var ERROR_DEMO_CAUSE = "conveyor"; // OUTPUT_PRIMARY_CAUSE[ERROR_DEMO_OUTPUT]과 값은 같지만, 그 상수는
+  // "실제 인과식이 어느 공정을 원인으로 쓰는지/화면에 뭘 후보로 보여줄지"를
+  // 위한 것이고 이건 "이 데모 버튼이 어느 두 채널을 동시에 조작하는지"를
+  // 위한 별개 상수라 그대로 분리해 둔다(OUTPUT_PRIMARY_CAUSE 선언부 주석 참고).
 
   // 룰별로 정확히 그 룰만 트리거되도록 설계된 원시값 시퀀스를 만든다. 부호는
   // 주입마다 한 번만 무작위로 정해 그 채널의 실측 mu/rawSigma를 기준으로 만든다.
   // 각 룰의 배율은 판정식(ruleCheck)의 임계값을 확실히 넘기면서, 더 낮은
   // 번호의 룰(예: Rule4용 0.6σ가 Rule3의 1σ 임계값)까지 함께 튀지 않도록
-  // 여유를 두고 선택했다.
+  // 여유를 두고 선택했다. (2026-09-29: 기존 "판정 룰 강제 발생" 기능의
+  // 큐 생성 로직을 그대로 재사용 - 룰 정의 자체는 바뀐 게 없다.)
   function buildInjectionQueue(rule, def){
     var mu = def.mu, sigma = def.rawSigma;
     var sign = Math.random() < 0.5 ? -1 : 1;
@@ -1591,98 +1531,20 @@
     return queue;
   }
 
-  // 항목5(시간 가속)로 UI tick 하나가 서브틱 여러 개(=배속)를 만들게 되면서,
-  // "생성 호출마다 큐에서 하나씩 꺼내 쓰는" 예전 방식은 배속이 오르면 큐가
-  // UI tick 하나 안에서 다 소모돼버려(예: Rule5의 15개짜리 큐가 배속 60에서
-  // 0.25초 만에 소진) 원래 "15초 동안 연속 15개"라는 체감 페이스가 깨진다.
-  // 그래서 큐 소비는 tick()에서 UI tick당 딱 1개만 하고, 그 값을 이번 UI
-  // tick의 모든 서브틱에 동일하게 적용한다 - 아래 fixedOrNatural이 그
-  // "이번 UI tick에 적용할 고정값"을 받아 대상 채널에만 꽂아준다. 큐 자체의
-  // 소비 속도(=몇 초 만에 큐가 바닥나는지)는 배속과 무관하게 유지된다(설계문서
-  // §2.3). 단, 2026-09-23부터는 그 고정값이 서브틱마다 raw 화면에도 그대로
-  // pushRaw되므로(위 항목5 주석 참고), 배속이 높을수록 "한 실제 초" 동안
-  // raw 화면·raw 판정 로그에 같은 주입값이 여러 번(최대 배속 횟수만큼)
-  // 연속으로 찍힌다 - Rule2~5(N개 연속 위반)처럼 여러 지점이 필요한 룰은
-  // 배속이 높을수록 한 큐 항목만으로도 즉시 충족될 수 있다는 뜻이다. 배속이
-  // 높을수록 청크/버킷 누적기 안에서도 그 값이 반복되는 비중이 커져 집계
-  // 뷰에서 주입 효과가 더 뚜렷하게 드러나는 것은 기존과 동일.
-  function fixedOrNatural(chId, naturalVal, fixedChId, fixedVal){
-    if (fixedChId === chId && fixedVal !== null) return fixedVal;
+  // 이번 서브틱에 적용할 "고정값 맵"(예: { conveyor: 12.3, chi: 25.01 })을
+  // 받아 대상 채널에만 자연값 대신 꽂아준다. 기존에는 채널 1개(fixedChId/
+  // fixedVal)만 동시에 강제할 수 있었지만, "오류 시연"은 내폭·솔트컨베이어
+  // 두 채널을 항상 동시에 강제해야 하므로 맵 형태로 일반화한다.
+  function fixedOrNatural(chId, naturalVal, fixedMap){
+    if (fixedMap && Object.prototype.hasOwnProperty.call(fixedMap, chId)) return fixedMap[chId];
     return naturalVal;
   }
 
-  function setRuleInjectButtonsDisabled(disabled){
-    document.querySelectorAll(".rule-inject-btn").forEach(function(btn){ btn.disabled = disabled; });
-  }
+  var errorDemo = { active: false, rule: null, outputQueue: [], causeQueue: [] };
 
-  // ---------- 공정별 열화 주입(수동) ----------
-  // 위 판정 룰 강제 발생과는 완전히 별개의 기능이다 - 대상 채널을 무작위로
-  // 숨기는 대신, 사용자가 직접 원하는 공정을 골라 그 채널의 평균을 서서히
-  // 이동시킨다. 공정1~5 각각의 고유 채널(=PROCESS_DEFS의 channels[0])과
-  // 핵심 산출물(내폭·외폭) 자신까지 총 7개 채널 각각이 독립적인 상태를
-  // 가지므로 여러 개를 동시에 켤 수도 있다. 인과관계로 연결된 공정
-  // (솔트조→외폭, 솔트컨베이어→내폭)은 computePairValues()가 causeNatural(주입으로
-  // 이동된 자연값)을 그대로 인과식에 사용하므로, 그 영향이 결과 채널에
-  // 실제로 전파되는 모습까지 함께 보인다 - 이 점이 판정 룰 강제 발생(전파
-  // 차단)과의 핵심 차이다. 내폭/외폭 자신에 대한 주입은 그와 별개로,
-  // computePairValues()에서 causeVal과 무관하게 effectNatural에 직접 shift를
-  // 더해 "결과물 자체의 이상"을 시연한다(원인 채널로 역전파되지 않음).
-  var MANUAL_INJECT_TICKS = 55, MANUAL_INJECT_RAMP = 22, MANUAL_INJECT_NOISE_MULT = 2.6;
-  var MANUAL_INJECT_CHANNELS = ["hardening", "salt", "conveyor", "wash", "belt", "chi", "oe"];
-  var MANUAL_INJECT_LABEL = {
-    hardening: "1 소입로",
-    salt: "2 솔트조",
-    conveyor: "3 솔트컨베이어",
-    wash: "4 세정기",
-    belt: "5 건조로",
-    chi: "📏 내폭",
-    oe: "📐 외폭"
-  };
-  var manualInject = {};
-  MANUAL_INJECT_CHANNELS.forEach(function(id){ manualInject[id] = { active: false, t: 0 }; });
-
-  function manualRampFracFor(chId){
-    var inj = manualInject[chId];
-    if (!inj || !inj.active) return 0;
-    return Math.min(1, inj.t / MANUAL_INJECT_RAMP);
-  }
-
-  // ---------- 항목6(2026-09-21): 분산(산포) 확대 주입 ----------
-  // 공정별 열화 주입(수동)과 완전히 별개의 상태를 갖는다 - 평균은 전혀
-  // 건드리지 않고 노이즈(rawSigma)만 증폭한다. 지속시간·램프 구간은 기존
-  // 수동 주입과 동일(55틱, 22틱 램프)하게 맞춰 코드 일관성을 유지하되,
-  // 배율은 최초 3배로 확정했으나, 구현 후 검증 중 Rule1 임계값(±3σ)이
-  // 증폭 전 σ 기준으로 고정되어 있어 배율이 오르면 위치(I)·산포(MR) 양쪽의
-  // 이탈 확률이 함께 오른다는 게 확인됨(3배 시 청크당 위치 31.7%/MR 38.5% -
-  // "위치는 그대로, 산포만 이탈"이라는 원래 의도한 대비가 약해짐). 재확인
-  // 결과 1.5배로 하향 확정(2026-09-21, 2차 AskUserQuestion) - 위치 4.6%/MR
-  // 8.2%로 대비가 더 뚜렷해지되, MR이 완전히 안 뜰 수도 있는 트레이드오프는
-  // 감수하기로 함. 같은 채널 목록(MANUAL_INJECT_CHANNELS)을 그대로 재사용한다.
-  var VAR_INJECT_TICKS = 55, VAR_INJECT_RAMP = 22, VAR_INJECT_NOISE_MULT = 1.5;
-  var varInject = {};
-  MANUAL_INJECT_CHANNELS.forEach(function(id){ varInject[id] = { active: false, t: 0 }; });
-
-  function varRampFracFor(chId){
-    var inj = varInject[chId];
-    if (!inj || !inj.active) return 0;
-    return Math.min(1, inj.t / VAR_INJECT_RAMP);
-  }
-
-  function startVarInject(chId){
-    var inj = varInject[chId];
-    if (!inj || inj.active) return false;
-    inj.active = true;
-    inj.t = 0;
-    return true;
-  }
-
-  // 요청 2026-09-22(15차): 55틱 다 채우지 않고 버튼 재클릭으로 즉시 중단.
-  function stopVarInject(chId){
-    var inj = varInject[chId];
-    if (!inj || !inj.active) return false;
-    inj.active = false;
-    inj.t = 0;
-    return true;
+  function setErrorDemoButtonDisabled(disabled){
+    var btn = document.getElementById("errorDemoBtn");
+    if (btn) btn.disabled = disabled;
   }
 
   // ---------- 정상상태 판정 억제(요청 2026-09-22, 14차) ----------
@@ -1700,15 +1562,14 @@
   // 아예 검사하지 않고(차트에 그려지는 실제 데이터·평균·Cpk는 전혀
   // 건드리지 않음 - "판정만" 억제), 주입이 시작되는 순간부터는 기존에
   // 이미 검증된 판정 로직·확률이 그대로 즉시 작동한다.
-  // 인과관계로 엮인 결과 채널(내폭←솔트컨베이어, 외폭←솔트조)은 원인
-  // 채널이 주입 중이면 그 영향이 인과식을 타고 실제로 전파되어 나타나야
-  // 하므로(인과관계 시연이 이 데모의 핵심 목적) 원인 채널의 주입 상태도
-  // 함께 확인한다 - 자기 채널 직접 주입 OR 원인 채널 주입 중 하나만
-  // 참이어도 판정을 켠다.
+  // 2026-09-29: 4종 개별 주입 상태(ruleInject/manualInject/varInject/
+  // equipStop)가 전부 errorDemo 하나로 합쳐지면서, "지금 주입 중인 채널"도
+  // errorDemo.active 여부 + 그 대상 채널(ERROR_DEMO_OUTPUT/ERROR_DEMO_CAUSE)
+  // 두 개로 줄었다. 인과관계로 엮인 결과 채널(내폭←솔트컨베이어)은 원인
+  // 채널이 주입 중이면 그 영향이 인과식을 타고 실제로 전파되어야 하므로
+  // (인과관계 시연이 이 데모의 핵심 목적) causeId 체인을 그대로 재귀 확인한다.
   function isChannelUnderInjection(chId){
-    if (ruleInject.active && ruleInject.chId === chId) return true;
-    if (manualInject[chId] && manualInject[chId].active) return true;
-    if (varInject[chId] && varInject[chId].active) return true;
+    if (errorDemo.active && (chId === ERROR_DEMO_OUTPUT || chId === ERROR_DEMO_CAUSE)) return true;
     var def = CHANNEL_DEFS[chId];
     if (def && def.causeId) return isChannelUnderInjection(def.causeId);
     return false;
@@ -2706,7 +2567,9 @@
     if (cpk !== null) s.cpk = cpk;
 
     var trig = isChannelUnderInjection(id) ? ruleCheck(s.chunkHistory, def.chunkSigma, def.mu) : [];
-    var mode = OUTPUT_CHANNELS.indexOf(id) !== -1 ? "1시간 버킷" : "시간당 청크";
+    // 시연 중에는 내폭·외폭도 4분 청크로 도는 중이므로 로그 문구도 그에
+    // 맞춰 "시간당 청크"로 표시한다(실제 운영일 때만 "1시간 버킷").
+    var mode = (OUTPUT_CHANNELS.indexOf(id) !== -1 && !outputDemoAggActive) ? "1시간 버킷" : "시간당 청크";
     trig.forEach(function(r){
       if (s.chunkPrevTrig.indexOf(r) === -1) pushLog(id, r, mode, "loc", mean, trig.dir[r]);
       if (RULE_BATCHED[r]) s.pendingBatch[r] = trig.dir[r];
@@ -2728,7 +2591,7 @@
       s.mrHistory.push(mrVal);
       if (s.mrHistory.length > MAX_CHUNK) s.mrHistory.shift();
       var mrTrig = isChannelUnderInjection(id) ? ruleCheck(s.mrHistory, def.mrSigma, def.mrMu) : [];
-      var mrMode = OUTPUT_CHANNELS.indexOf(id) !== -1 ? "버킷간 MR" : "청크간 MR";
+      var mrMode = (OUTPUT_CHANNELS.indexOf(id) !== -1 && !outputDemoAggActive) ? "버킷간 MR" : "청크간 MR";
       mrTrig.forEach(function(r){
         if (s.mrPrevTrig.indexOf(r) === -1) pushLog(id, r, mrMode, "mr", mean, mrTrig.dir[r]);
         if (RULE_BATCHED[r]) s.pendingBatch[r] = mrTrig.dir[r];
@@ -2765,54 +2628,28 @@
   // (표시/누적은 호출부의 몫 - 항목5로 UI tick 하나가 서브틱 여러 개를
   // 만들게 되면서, "값 생성"과 "raw 화면에 push"를 분리해야 서브틱마다
   // 값은 새로 뽑되 raw 화면에는 tick당 마지막 값 하나만 넘길 수 있다).
-  function computePairValues(causeId, effectId, fixedChId, fixedVal){
+  // 2026-09-29: 공정별 열화 주입(수동)/분산 확대 주입 제거에 따라 causeShift/
+  // noiseMult 등 램프 관련 항은 모두 사라지고, "오류 시연"의 fixedMap을
+  // 통한 강제 대체(fixedOrNatural)만 남는다 - 자연값 계산 자체는 항상 순수
+  // mu/sigma 기반이고, 강제 채널만 그 값을 그대로 덮어쓴다.
+  function computePairValues(causeId, effectId, fixedMap){
     var causeDef = CHANNEL_DEFS[causeId];
     var effectDef = CHANNEL_DEFS[effectId];
 
-    // 원인 채널의 "자연값"은 룰 주입과 무관하게 항상 계산해 둔다 - 효과 채널의
-    // 인과식은 반드시 이 자연값을 기준으로 계산해야, 원인 채널에 룰을
-    // 강제해도 그 효과가 인과관계를 타고 짝지어진 효과 채널로 새어나가지
-    // 않는다(공정별로만, 인과관계와 무관하게 데이터가 나와야 한다는 원칙 유지).
-    // 단, "공정별 열화 주입(수동)"은 사용자가 대상을 미리 알고 의도적으로
-    // 켜는 기능이므로 여기서는 반대로 causeNatural 자체에 평균이동을 실어,
-    // 그 영향이 인과식을 타고 결과 채널까지 그대로 전파되게 둔다.
-    var causeManualFrac = manualRampFracFor(causeId);
-    var causeShift = causeManualFrac * (6 * causeDef.sigma);
-    // 항목6: 분산 확대는 원인 채널 자신의 노이즈에도 직접 곱해진다(기존
-    // 수동 주입은 원인 채널 자신의 노이즈는 건드리지 않고 평균만 옮겼던 것과
-    // 대비됨) - causeNatural이 그대로 인과식에 들어가므로 이 확대된 산포도
-    // 결과 채널로 자연히 전파된다.
-    var causeVarFrac = varRampFracFor(causeId);
-    var causeNoiseMult = 1 + (VAR_INJECT_NOISE_MULT - 1) * causeVarFrac;
-    var causeNatural = causeDef.mu + causeDef.sigma * causeNoiseMult * randn() + causeShift;
-    var causeVal = fixedOrNatural(causeId, causeNatural, fixedChId, fixedVal);
+    var causeNatural = causeDef.mu + causeDef.sigma * randn();
+    var causeVal = fixedOrNatural(causeId, causeNatural, fixedMap);
 
-    var effectVarFrac = varRampFracFor(effectId);
-    var noiseMult = (1 + (MANUAL_INJECT_NOISE_MULT - 1) * causeManualFrac) * (1 + (VAR_INJECT_NOISE_MULT - 1) * effectVarFrac);
-    var noise = effectDef.noiseSigma * noiseMult * randn();
-
-    // 내폭/외폭(effectId) 자신에 대한 수동 주입 - 원인 채널과는 완전히
-    // 별개로, "결과물 자체의 이상"을 보여주기 위해 effectNatural에 직접
-    // shift를 더한다. causeVal/causeNatural에는 반영하지 않으므로 원인
-    // 채널 쪽으로 역전파되지 않는다.
-    var effectManualFrac = manualRampFracFor(effectId);
-    var effectShift = effectManualFrac * (6 * effectDef.rawSigma);
-    var effectNatural = effectDef.mu + effectDef.beta * (causeNatural - causeDef.mu) + noise + effectShift;
-    var effectVal = fixedOrNatural(effectId, effectNatural, fixedChId, fixedVal);
+    var noise = effectDef.noiseSigma * randn();
+    var effectNatural = effectDef.mu + effectDef.beta * (causeNatural - causeDef.mu) + noise;
+    var effectVal = fixedOrNatural(effectId, effectNatural, fixedMap);
 
     return { causeVal: causeVal, effectVal: effectVal };
   }
 
-  function computeStandaloneValue(id, fixedChId, fixedVal){
+  function computeStandaloneValue(id, fixedMap){
     var def = CHANNEL_DEFS[id];
-    var manualFrac = manualRampFracFor(id);
-    var varFrac = varRampFracFor(id);
-    var shift = manualFrac * (6 * def.sigma);
-    // 항목6: 기존 수동주입 노이즈배율과 분산확대 노이즈배율은 서로 독립이라
-    // 곱으로 합성한다(둘 다 0이면 1×1=1, 평소와 동일).
-    var noiseMult = (1 + (MANUAL_INJECT_NOISE_MULT - 1) * manualFrac) * (1 + (VAR_INJECT_NOISE_MULT - 1) * varFrac);
-    var natural = def.mu + def.sigma * noiseMult * randn() + shift;
-    return fixedOrNatural(id, natural, fixedChId, fixedVal);
+    var natural = def.mu + def.sigma * randn();
+    return fixedOrNatural(id, natural, fixedMap);
   }
 
   // ---------- 2026-09-29 개편: 배속 개념을 이 함수 하나로 흡수 ----------
@@ -2825,7 +2662,7 @@
   // 이 함수를 한 애니메이션 프레임 안에서 여러 번 몰아 불러 2시간(7200
   // 서브틱) 분량을 짧은 실제 시간에 "주루룩" 재생한다. 두 경로 모두 완전히
   // 같은 계산 로직을 타므로 시연 재생 결과와 평시 진행 결과가 어긋나지 않는다.
-  function advanceOneSubtick(fixedChId, fixedVal){
+  function advanceOneSubtick(fixedMap){
     state.subTick++;
     // tick과 subTick을 항상 같은 값으로 맞춘다 - 배속이 있던 시절엔 "실제
     // 경과초(tick)"와 "배속 반영 누적 시뮬레이션초(subTick)"가 서로 달라야
@@ -2836,28 +2673,37 @@
     // 맞춰야 한다.
     state.tick = state.subTick;
 
-    // 항목10: 정지된 채널은 accumulateChunk/pushRaw를 건너뛴다 - 값 자체는
-    // (인과관계로 엮인 짝 채널이 계속 흐를 수 있게) 그대로 계산하되, 정지된
-    // 채널 자신의 청크 누적·raw 이력에는 반영하지 않아 화면이 그 자리에서
-    // 완전히 멈춘 것처럼 보인다. 인과쌍(솔트컨베이어→내폭, 솔트조→외폭)도
-    // 위 두 주입 기능과 동일하게 서로 독립 취급 - 한쪽만 멈춰도 다른쪽은
-    // 계속 흐른다.
-    var hardeningVal = computeStandaloneValue("hardening", fixedChId, fixedVal);
-    if (!equipStop.hardening.stopped){ accumulateChunk("hardening", hardeningVal); pushRaw("hardening", hardeningVal); }
+    // 2026-09-29: 설비 정지/재가동 기능 제거에 따라 채널별 stopped 가드도
+    // 함께 제거 - 이제 7개 채널 모두 매 서브틱 예외 없이 accumulateChunk/
+    // pushRaw를 탄다.
+    var hardeningVal = computeStandaloneValue("hardening", fixedMap);
+    accumulateChunk("hardening", hardeningVal); pushRaw("hardening", hardeningVal);
 
-    var conv = computePairValues("conveyor", "chi", fixedChId, fixedVal);
-    if (!equipStop.conveyor.stopped){ accumulateChunk("conveyor", conv.causeVal); pushRaw("conveyor", conv.causeVal); }
-    if (!equipStop.chi.stopped){ accumulateChunk("chi", conv.effectVal); pushRaw("chi", conv.effectVal); }
+    var conv = computePairValues("conveyor", "chi", fixedMap);
+    accumulateChunk("conveyor", conv.causeVal); pushRaw("conveyor", conv.causeVal);
+    // 오류 시연: Rule2~4(정기 보고 대상)는 원래 시간당 경계까지 화면 노출이
+    // 미뤄지지만(visibleTrigFor는 reportedBatch만 봄), 이 데모는 버튼을
+    // 누르는 즉시 내폭의 "원인 후보 공정"이 보여야 한다. 솔트컨베이어 쪽
+    // 판정이 바로 이번 서브틱에 막 pendingBatch로 잡혔다면, 곧이어 실행될
+    // 내폭 판정(findCauseCandidates→visibleTrigFor)보다 먼저 그 자리에서
+    // reportedBatch로 승격해 "이미 보이는" 상태로 만든다 - 전역 flushReportBatch는
+    // 7채널 전부의 정기 보고 주기에 영향을 주므로 피하고, 이 채널의 이
+    // 룰 하나만 골라 승격한다.
+    if (errorDemo.active && RULE_BATCHED[errorDemo.rule]){
+      var convPending = chState.conveyor.pendingBatch[errorDemo.rule];
+      if (convPending) chState.conveyor.reportedBatch[errorDemo.rule] = convPending;
+    }
+    accumulateChunk("chi", conv.effectVal); pushRaw("chi", conv.effectVal);
 
-    var salt = computePairValues("salt", "oe", fixedChId, fixedVal);
-    if (!equipStop.salt.stopped){ accumulateChunk("salt", salt.causeVal); pushRaw("salt", salt.causeVal); }
-    if (!equipStop.oe.stopped){ accumulateChunk("oe", salt.effectVal); pushRaw("oe", salt.effectVal); }
+    var salt = computePairValues("salt", "oe", fixedMap);
+    accumulateChunk("salt", salt.causeVal); pushRaw("salt", salt.causeVal);
+    accumulateChunk("oe", salt.effectVal); pushRaw("oe", salt.effectVal);
 
-    var washVal = computeStandaloneValue("wash", fixedChId, fixedVal);
-    if (!equipStop.wash.stopped){ accumulateChunk("wash", washVal); pushRaw("wash", washVal); }
+    var washVal = computeStandaloneValue("wash", fixedMap);
+    accumulateChunk("wash", washVal); pushRaw("wash", washVal);
 
-    var beltVal = computeStandaloneValue("belt", fixedChId, fixedVal);
-    if (!equipStop.belt.stopped){ accumulateChunk("belt", beltVal); pushRaw("belt", beltVal); }
+    var beltVal = computeStandaloneValue("belt", fixedMap);
+    accumulateChunk("belt", beltVal); pushRaw("belt", beltVal);
 
     // 정기 보고(1시간) 경계: 공정센서 15청크(240×15=3600서브틱)와 내폭·외폭
     // 1버킷(3600서브틱)이 정확히 같은 서브틱 수에서 끝나므로, subTick이
@@ -2868,54 +2714,20 @@
   }
 
   function tick(){
-    // 수동 열화 주입 램프는 UI tick 단위로 진행한다(설계 문서 §2.3).
-    MANUAL_INJECT_CHANNELS.forEach(function(chId){
-      var inj = manualInject[chId];
-      if (!inj.active) return;
-      inj.t++;
-      var btn = document.querySelector('.manual-inject-btn[data-ch="' + chId + '"]');
-      if (inj.t >= MANUAL_INJECT_TICKS){
-        inj.active = false;
-        inj.t = 0;
-        if (btn){ btn.disabled = false; btn.classList.remove("injecting"); btn.textContent = MANUAL_INJECT_LABEL[chId]; }
-      } else if (btn){
-        btn.textContent = "⏹ 중단 (" + (MANUAL_INJECT_TICKS - inj.t) + "틱 남음)";
-      }
-    });
-
-    // 항목6: 분산(산포) 확대 주입 램프도 위와 동일하게 UI tick 단위로 진행한다.
-    MANUAL_INJECT_CHANNELS.forEach(function(chId){
-      var vinj = varInject[chId];
-      if (!vinj.active) return;
-      vinj.t++;
-      var vbtn = document.querySelector('.var-inject-btn[data-ch="' + chId + '"]');
-      if (vinj.t >= VAR_INJECT_TICKS){
-        vinj.active = false;
-        vinj.t = 0;
-        if (vbtn){ vbtn.disabled = false; vbtn.classList.remove("injecting"); vbtn.textContent = MANUAL_INJECT_LABEL[chId]; }
-        var varStatusDoneEl = document.getElementById("varInjectStatus");
-        if (varStatusDoneEl) varStatusDoneEl.textContent = "";
-      } else if (vbtn){
-        vbtn.textContent = "⏹ 중단 (" + (VAR_INJECT_TICKS - vinj.t) + "틱 남음)";
-      }
-    });
-
-    // 판정 룰 강제 발생: 이번 tick에 적용할 값을 큐에서 딱 1개만 뽑는다.
-    var fixedChId = null, fixedVal = null;
-    if (ruleInject.active && ruleInject.queue.length){
-      fixedChId = ruleInject.chId;
-      fixedVal = ruleInject.queue.shift();
+    // 오류 시연: 이번 tick에 적용할 값을 두 채널(솔트컨베이어/내폭) 큐에서
+    // 딱 1개씩만 뽑는다 - 두 큐는 buildInjectionQueue(같은 rule)로 만들어져
+    // 항상 길이가 같으므로 매 tick 정확히 짝을 맞춰 소비된다.
+    var fixedMap = null;
+    if (errorDemo.active && errorDemo.outputQueue.length){
+      fixedMap = {};
+      fixedMap[ERROR_DEMO_CAUSE] = errorDemo.causeQueue.shift();
+      fixedMap[ERROR_DEMO_OUTPUT] = errorDemo.outputQueue.shift();
     }
 
-    advanceOneSubtick(fixedChId, fixedVal);
+    advanceOneSubtick(fixedMap);
 
-    if (ruleInject.active && ruleInject.queue.length === 0){
-      ruleInject.active = false;
-      ruleInject.chId = null;
-      ruleInject.rule = null;
-      setRuleInjectButtonsDisabled(false);
-      var statusEl = document.getElementById("ruleInjectStatus");
-      if (statusEl) statusEl.textContent = "주입 완료";
+    if (errorDemo.active && errorDemo.outputQueue.length === 0 && errorDemo.causeQueue.length === 0){
+      completeErrorDemo();
     }
 
     render();
@@ -3399,7 +3211,11 @@
     document.getElementById("currentVal").textContent = formatFixedWidthVal(last);
     // 내폭·외폭(치수실측)은 1시간 버킷, 나머지 5개 공정센서는 4분 청크로
     // 집계 창이 다르다(항목1) - 화면 문구도 채널에 맞춰 바꿔준다.
-    var isOutputCh = OUTPUT_CHANNELS.indexOf(id) !== -1;
+    // 2026-09-29: 시연 재생 중(또는 그 직후 정지 상태)에는 내폭·외폭도
+    // 4분 청크 기준으로 도는 중이므로, 화면 문구도 "1시간 버킷"이 아니라
+    // 공정센서와 같은 "시간당 청크"로 보여줘야 실제 집계 단위와 어긋나지
+    // 않는다 - 실제 운영(1x)으로 돌아오면 다시 "1시간 버킷"으로 복원된다.
+    var isOutputCh = OUTPUT_CHANNELS.indexOf(id) !== -1 && !outputDemoAggActive;
     var aggLabel = isOutputCh ? "1시간 버킷" : "시간당 청크";
     var mrLabel = isOutputCh ? "버킷간 MR(산포)" : "청크간 MR(산포)";
     var modeLabelText = state.mode === "raw" ? "초단위" : (state.mode === "mr" ? mrLabel : aggLabel);
@@ -3660,12 +3476,15 @@
   var demoRunning = false;
   var demoRafId = null;
 
-  // 판정 룰 강제발생·수동/분산 주입·설비 정지 4종 시연 버튼은 시연 재생이
-  // 끝난 뒤에도(=tick() 엔진이 다시 필요할 때) 계속 쓸 수 있어야 하므로,
-  // 그 클릭 핸들러들이 필요할 때 평시 엔진(setInterval 기반 tick(), 1서브틱
-  // =실제 1초)을 스스로 깨워 쓴다 - 아래 4곳의 핸들러에서 호출.
+  // "오류 시연" 버튼은 "2시간 시연" 재생이 끝난 뒤에도(=tick() 엔진이 다시
+  // 필요할 때) 계속 쓸 수 있어야 하므로, startErrorDemo()가 필요할 때
+  // 평시 엔진(setInterval 기반 tick(), 1서브틱=실제 1초)을 스스로 깨워 쓴다.
   function ensureTimerRunning(){
     if (demoRunning) return; // 시연 재생 중에는 별도로 깨우지 않는다(버튼 자체가 비활성화됨).
+    // 2026-09-29: 평시(실시간) 엔진이 깨어나는 순간부터는 내폭·외폭도 다시
+    // 기준서 그대로인 1시간 버킷 기준으로 되돌린다 - 시연이 남겨둔 4분 청크
+    // 오버라이드가 실제 운영 판정에 새어 들어가지 않도록.
+    setOutputDemoAggActive(false);
     state.running = true;
     startTimer();
   }
@@ -3676,47 +3495,23 @@
     state.locViolCount = 0;
     state.mrViolCount = 0;
     state.log = [];
-    ruleInject.active = false;
-    ruleInject.chId = null;
-    ruleInject.rule = null;
-    ruleInject.queue = [];
-    setRuleInjectButtonsDisabled(false);
-    var ruleStatusEl = document.getElementById("ruleInjectStatus");
-    if (ruleStatusEl) ruleStatusEl.textContent = "";
-    MANUAL_INJECT_CHANNELS.forEach(function(chId){
-      manualInject[chId].active = false;
-      manualInject[chId].t = 0;
-      var mBtn = document.querySelector('.manual-inject-btn[data-ch="' + chId + '"]');
-      if (mBtn){ mBtn.disabled = false; mBtn.classList.remove("injecting"); mBtn.textContent = MANUAL_INJECT_LABEL[chId]; }
-    });
-    // 항목6: 분산(산포) 확대 주입 상태도 함께 초기화
-    MANUAL_INJECT_CHANNELS.forEach(function(chId){
-      varInject[chId].active = false;
-      varInject[chId].t = 0;
-      var vBtn = document.querySelector('.var-inject-btn[data-ch="' + chId + '"]');
-      if (vBtn){ vBtn.disabled = false; vBtn.classList.remove("injecting"); vBtn.textContent = MANUAL_INJECT_LABEL[chId]; }
-    });
-    var varStatusResetEl = document.getElementById("varInjectStatus");
-    if (varStatusResetEl) varStatusResetEl.textContent = "";
-    // 항목10: 설비 정지 상태도 시연을 다시 시작하면 함께 되돌린다.
-    MANUAL_INJECT_CHANNELS.forEach(function(chId){
-      equipStop[chId].stopped = false;
-      var eBtn = document.querySelector('.equip-stop-btn[data-ch="' + chId + '"]');
-      if (eBtn){ eBtn.classList.remove("stopped"); eBtn.textContent = MANUAL_INJECT_LABEL[chId]; }
-    });
-    var equipStopStatusResetEl = document.getElementById("equipStopStatus");
-    if (equipStopStatusResetEl) equipStopStatusResetEl.textContent = "";
+    errorDemo.active = false;
+    errorDemo.rule = null;
+    errorDemo.outputQueue = [];
+    errorDemo.causeQueue = [];
+    setErrorDemoButtonDisabled(false);
+    var errorDemoStatusResetEl = document.getElementById("errorDemoStatus");
+    if (errorDemoStatusResetEl) errorDemoStatusResetEl.textContent = "";
     CHANNEL_IDS.forEach(function(id){
       chState[id] = { rawHistory: [], chunkHistory: [], mrHistory: [], ewmaHistory: [], ewmaValue: null, rawPrevTrig: [], chunkPrevTrig: [], mrPrevTrig: [], rawTrigDir: {}, chunkTrigDir: {}, mrTrigDir: {}, rawWorstColor: [], chunkWorstColor: [], mrWorstColor: [], alarm: false, cpk: null, alerts: {}, alertOpen: {}, pendingBatch: {}, reportedBatch: {}, chunkAccumSum: 0, chunkAccumSumSq: 0, chunkAccumCount: 0 };
     });
     render();
   }
 
-  // 시연 재생 중에는 개별 시연 버튼(판정 룰 강제발생 등)을 눌러 상태가
-  // 서로 꼬이는 일이 없도록 잠가둔다 - 재생이 끝나면 다시 풀린다.
+  // 시연 재생("2시간 시연") 중에는 "오류 시연" 버튼을 눌러 상태가 서로
+  // 꼬이는 일이 없도록 잠가둔다 - 재생이 끝나면 다시 풀린다.
   function setDemoInteractionsDisabled(disabled){
-    [".rule-inject-btn", ".manual-inject-btn", ".var-inject-btn",
-     "#varInjectRandomBtn", ".equip-stop-btn"].forEach(function(sel){
+    ["#errorDemoBtn"].forEach(function(sel){
       document.querySelectorAll(sel).forEach(function(el){ el.disabled = disabled; });
     });
   }
@@ -3739,8 +3534,11 @@
 
   function runDemo(){
     if (demoRunning) return;
-    stopTimer(); // 평시 엔진이 혹시 돌고 있었다면(개별 시연 버튼으로 깨어난 경우) 재생과 겹치지 않도록 멈춘다.
+    stopTimer(); // 평시 엔진이 혹시 돌고 있었다면(오류 시연 버튼으로 깨어난 경우) 재생과 겹치지 않도록 멈춘다.
     resetAllForDemo();
+    // 2026-09-29: 시연 재생 동안만 내폭·외폭도 4분 청크 기준으로 전환 -
+    // "점이 너무 안 찍힌다"는 요청 반영(실제 운영 기준은 그대로 유지).
+    setOutputDemoAggActive(true);
     demoRunning = true;
     setDemoUiRunning(true);
     updateDemoProgress();
@@ -3755,7 +3553,7 @@
       // 한 프레임 안에서 목표치까지 서브틱을 몰아 진행 - 실제 tick()과 완전히
       // 같은 계산 로직(advanceOneSubtick)을 타므로 결과가 평시 진행과 같다.
       while (state.subTick < targetSubTick){
-        advanceOneSubtick(null, null);
+        advanceOneSubtick(null);
       }
       render();
       updateDemoProgress();
@@ -3785,6 +3583,64 @@
   // 씌워, 나중에 다른 위치에 다시 버튼을 붙이면 바로 재사용할 수 있게 한다.
   var resetBtnEl = document.getElementById("resetBtn");
   if (resetBtnEl) resetBtnEl.addEventListener("click", resetAllForDemo);
+
+  // ---------- 오류 시연(2026-09-29) ----------
+  // 내폭(chi)과 그 P-FMEA 근거 1차 원인 후보 공정인 솔트컨베이어(conveyor)에
+  // 무작위(Rule1~5 중 하나) 룰을 동시에 강제 발생시킨다 - 2차
+  // AskUserQuestion 확정대로, 버튼이 눌려있는 동안만 내폭(·외폭)도 공정
+  // 센서와 같은 4분 청크 기준으로 전환해(setOutputDemoAggActive) 두 채널의
+  // 집계 주기를 맞춘다. 큐가 모두 소진되면(tick()에서 확인) completeErrorDemo가
+  // 원래 기준(1시간 버킷)으로 되돌린다.
+  // Rule5(15점 밀집 ±1σ)는 자연 노이즈도 흔히 만족하는 조건이라(정규분포상
+  // 한 점이 ±1σ 안에 들 확률이 약 68%), 주입 시작 전 두 채널에 이미 쌓여있던
+  // "자연값" 꼬리가 우연히 서로 다른 시점에 조건을 만족시키면 - 내폭이
+  // 솔트컨베이어보다 먼저(혹은 나중에) 룰을 띄워, 그 순간 반대쪽은 아직
+  // 안 띄운 상태라 원인 후보 공정이 빈 채로 로그가 남는 경우가 실측 확인됨
+  // (5회 시연 중 1회, Rule5에서만 재현). Rule1~4는 임계값이 훨씬 커
+  // 자연값이 우연히 만족할 확률이 사실상 0이라 이 문제가 없다. 그래서
+  // 시연 시작 시 두 채널의 raw 이력창을 비워, 주입되는 15(혹은 그 이하)개
+  // 값이 항상 "0부터 정확히 같은 속도로" 채워지게 한다 - 두 채널의 큐
+  // 길이가 항상 같으므로(같은 rule로 생성) 어떤 룰이든 마지막 큐 항목이
+  // 들어가는 서브틱에 두 채널 모두 처음으로, 그리고 반드시 동시에 조건을
+  // 만족한다.
+  function resetRawWindowFor(chId){
+    var s = chState[chId];
+    s.rawHistory = [];
+    s.rawWorstColor = [];
+    s.rawPrevTrig = [];
+    s.rawTrigDir = {};
+  }
+
+  function startErrorDemo(){
+    if (errorDemo.active) return;
+    ensureTimerRunning(); // 시연 종료 후 정지해 있던 평시 엔진을 필요할 때 깨운다.
+    setOutputDemoAggActive(true);
+    resetRawWindowFor(ERROR_DEMO_OUTPUT);
+    resetRawWindowFor(ERROR_DEMO_CAUSE);
+
+    var rule = RULE_ORDER[Math.floor(Math.random() * RULE_ORDER.length)];
+    errorDemo.active = true;
+    errorDemo.rule = rule;
+    errorDemo.outputQueue = buildInjectionQueue(rule, CHANNEL_DEFS[ERROR_DEMO_OUTPUT]);
+    errorDemo.causeQueue = buildInjectionQueue(rule, CHANNEL_DEFS[ERROR_DEMO_CAUSE]);
+    setErrorDemoButtonDisabled(true);
+    var statusEl = document.getElementById("errorDemoStatus");
+    if (statusEl) statusEl.textContent = rule + " 오류 시연 중… (내폭 + 솔트컨베이어 동시 발생)";
+  }
+
+  function completeErrorDemo(){
+    errorDemo.active = false;
+    errorDemo.rule = null;
+    errorDemo.outputQueue = [];
+    errorDemo.causeQueue = [];
+    setOutputDemoAggActive(false);
+    setErrorDemoButtonDisabled(false);
+    var statusEl = document.getElementById("errorDemoStatus");
+    if (statusEl) statusEl.textContent = "오류 시연 완료 - 내폭 OCAP 팝업의 '🔎 원인 후보 공정'에서 솔트컨베이어를 확인하세요";
+  }
+
+  var errorDemoBtnEl = document.getElementById("errorDemoBtn");
+  if (errorDemoBtnEl) errorDemoBtnEl.addEventListener("click", startErrorDemo);
 
   // ---------- 보고서 출력: 헤더 버튼 → 옆에 기간 선택 패널(블러 없음) →
   // 기간 클릭 시 중앙 모달로 그 기간의 보고서 표시(배경 블러). ----------
@@ -4107,139 +3963,12 @@
   }
   document.getElementById("reportExportPdfBtn").addEventListener("click", triggerReportPdfDownload);
 
-  document.querySelectorAll(".rule-inject-btn").forEach(function(btn){
-    btn.addEventListener("click", function(){
-      if (ruleInject.active) return;
-      ensureTimerRunning(); // 2026-09-29: 시연 종료 후 정지해 있던 평시 엔진을 필요할 때 깨운다.
-      var rule = this.getAttribute("data-rule");
-      var chId = CHANNEL_IDS[Math.floor(Math.random() * CHANNEL_IDS.length)];
-      var def = CHANNEL_DEFS[chId];
-      ruleInject.active = true;
-      ruleInject.chId = chId;
-      ruleInject.rule = rule;
-      ruleInject.queue = buildInjectionQueue(rule, def);
-      setRuleInjectButtonsDisabled(true);
-      var statusEl = document.getElementById("ruleInjectStatus");
-      if (statusEl) statusEl.textContent = rule + " 주입 중…";
-    });
-  });
-
-  // 요청 2026-09-22(15차): "60틱 다 채우지 않고 재클릭하면 중단"되어야 한다는
-  // 요구사항 - 기존에는 주입 중 버튼을 disabled 처리해 재클릭 자체가
-  // 불가능했다. 이제 주입 중에도 버튼은 계속 클릭 가능한 상태로 두고,
-  // 같은 버튼을 다시 누르면 즉시 중단(active=false)한다. isChannelUnderInjection()이
-  // 이 active 플래그를 매 tick 그대로 재평가하므로, 중단한 다음 tick부터
-  // 바로 "정상상태"로 판정이 조용해진다(위 정상상태 판정 억제 주석 참고).
-  document.querySelectorAll(".manual-inject-btn").forEach(function(btn){
-    btn.addEventListener("click", function(){
-      var chId = this.getAttribute("data-ch");
-      var inj = manualInject[chId];
-      if (!inj) return;
-      if (inj.active){
-        inj.active = false;
-        inj.t = 0;
-        this.classList.remove("injecting");
-        this.textContent = MANUAL_INJECT_LABEL[chId];
-        return;
-      }
-      ensureTimerRunning(); // 2026-09-29: 램프 진행(inj.t++)은 tick()이 돌아야 진행되므로.
-      inj.active = true;
-      inj.t = 0;
-      this.classList.add("injecting");
-    });
-  });
-
-  // 항목6: 분산(산포) 확대 주입 - 채널별 수동 버튼(위와 동일하게 재클릭 중단 지원)
-  document.querySelectorAll(".var-inject-btn").forEach(function(btn){
-    btn.addEventListener("click", function(){
-      var chId = this.getAttribute("data-ch");
-      var inj = varInject[chId];
-      if (!inj) return;
-      if (inj.active){
-        stopVarInject(chId);
-        this.classList.remove("injecting");
-        this.textContent = MANUAL_INJECT_LABEL[chId];
-        var varStatusStopEl = document.getElementById("varInjectStatus");
-        if (varStatusStopEl) varStatusStopEl.textContent = "";
-        return;
-      }
-      ensureTimerRunning(); // 2026-09-29: 위와 동일한 이유.
-      if (!startVarInject(chId)) return;
-      this.classList.add("injecting");
-    });
-  });
-
-  // 항목6: 분산(산포) 확대 주입 - 무작위 채널 버튼(판정 룰 강제 발생과
-  // 유사하게, 대상을 미리 알려주지 않고 알람 뱃지·판정 로그로 확인하게 함).
-  // 이미 확대가 진행 중인 채널은 후보에서 제외하고, 후보가 하나도 없으면
-  // (7채널 전부 진행 중) 조용히 무시한다.
-  document.getElementById("varInjectRandomBtn").addEventListener("click", function(){
-    var candidates = MANUAL_INJECT_CHANNELS.filter(function(id){ return !varInject[id].active; });
-    if (candidates.length === 0) return;
-    ensureTimerRunning(); // 2026-09-29: 위와 동일한 이유.
-    var chId = candidates[Math.floor(Math.random() * candidates.length)];
-    if (!startVarInject(chId)) return;
-    var vbtn = document.querySelector('.var-inject-btn[data-ch="' + chId + '"]');
-    if (vbtn) vbtn.classList.add("injecting");
-    var statusEl = document.getElementById("varInjectStatus");
-    if (statusEl) statusEl.textContent = "분산 확대 주입 중… (대상은 공개하지 않음 - 판정 로그·알람 뱃지로 확인)";
-  });
-
-  // ---------- 항목10(2026-09-21): 설비 정지 / 재가동 ----------
-  // "재가동 시 런 카운트 초기화 + 보정 보류"를 한 화면에서 함께 보여주기
-  // 위한 기능. 위 두 주입 기능과 동일하게 7개 채널을 서로 독립된 토글로
-  // 다룬다 - MANUAL_INJECT_CHANNELS/MANUAL_INJECT_LABEL을 그대로 재사용.
-  // "보정 보류"는 이 데모에 실제 자동보정 실행 로직이 없으므로(OCAP 문구는
-  // 어디까지나 안내 텍스트) 상태 문구로만 안내한다 - 실제로 막히는 것은
-  // "데이터 생성"(tick()의 accumulateChunk/pushRaw 가드, 위 참고)이다.
-  var equipStop = {};
-  MANUAL_INJECT_CHANNELS.forEach(function(id){ equipStop[id] = { stopped: false }; });
-
-  // "런 카운트 초기화" - Rule1~5는 전부 히스토리 배열의 "최근 N개"를 보고
-  // 판정하므로, 정지 전 이력이 남아있으면 재가동 직후 값 몇 개만으로도
-  // 정지 전후가 이어진 것처럼 오판(예: 정지 전 7연속 한쪽 + 재가동 후
-  // 2개만 같은 쪽 → Rule4 즉시 발동)할 수 있다. 그래서 재가동 시 Rule
-  // 판정에 쓰이는 배열·누적기를 전부 비워 "새 설비를 켠 것"처럼 처음부터
-  // 다시 센다. 이미 떠 있는 확인 전 알람 칩(alerts/alertOpen)은 건드리지
-  // 않는다 - 이 앱의 다른 모든 알람과 마찬가지로 사용자가 "확인"을 눌러야
-  // 사라진다는 원칙을 그대로 유지한다.
-  function resetRunCountsFor(chId){
-    var s = chState[chId];
-    s.rawHistory = []; s.chunkHistory = []; s.mrHistory = []; s.ewmaHistory = [];
-    s.rawWorstColor = []; s.chunkWorstColor = []; s.mrWorstColor = [];
-    s.rawPrevTrig = []; s.chunkPrevTrig = []; s.mrPrevTrig = [];
-    s.chunkAccumSum = 0; s.chunkAccumSumSq = 0; s.chunkAccumCount = 0;
-    s.ewmaValue = null;
-    s.cpk = null;
-  }
-
-  document.querySelectorAll(".equip-stop-btn").forEach(function(btn){
-    btn.addEventListener("click", function(){
-      var chId = this.getAttribute("data-ch");
-      var st = equipStop[chId];
-      if (!st) return;
-      ensureTimerRunning(); // 2026-09-29: 정지/재가동 효과 모두 tick()이 계속 돌아야 화면에 드러난다.
-      var statusEl = document.getElementById("equipStopStatus");
-      if (!st.stopped){
-        st.stopped = true;
-        this.classList.add("stopped");
-        this.textContent = "▶ " + MANUAL_INJECT_LABEL[chId] + " 재가동";
-        if (statusEl) statusEl.textContent = "🛑 " + MANUAL_INJECT_LABEL[chId] + " 정지 중 - 데이터 생성 중단 · 자동보정 보류";
-      } else {
-        st.stopped = false;
-        this.classList.remove("stopped");
-        this.textContent = MANUAL_INJECT_LABEL[chId];
-        resetRunCountsFor(chId);
-        if (statusEl){
-          statusEl.textContent = "✅ " + MANUAL_INJECT_LABEL[chId] + " 재가동 - 런 카운트 초기화됨(과거 이력 삭제, 판정 새로 시작)";
-          setTimeout(function(){
-            if (statusEl.textContent.indexOf(MANUAL_INJECT_LABEL[chId] + " 재가동") !== -1) statusEl.textContent = "";
-          }, 4000);
-        }
-      }
-      render();
-    });
-  });
+  // 2026-09-29: 위 4종 버튼 그룹(판정 룰 강제발생/공정별 수동 열화 주입/
+  // 분산 확대 주입/설비 정지-재가동)의 클릭 핸들러를 "오류 시연" 단일
+  // 버튼 하나로 전부 대체했다 - 실제 로직(startErrorDemo)은 위
+  // ensureTimerRunning() 아래에 정의되어 있고, 여기서는 리스너 등록만 한다
+  // (등록 위치 자체는 runDemo/#demoRunBtn 리스너 바로 다음, startErrorDemo
+  // 선언 직후로 옮겨졌다 - 위 "오류 시연(2026-09-29)" 섹션 참고).
 
   window.addEventListener("resize", function(){ resizeCanvas(); drawChart(); drawReportChart(); });
 
@@ -4619,15 +4348,6 @@
       };
     });
 
-    var manualInjectOut = {};
-    var varInjectOut = {};
-    var equipStopOut = {};
-    MANUAL_INJECT_CHANNELS.forEach(function(cid){
-      manualInjectOut[cid] = { active: !!manualInject[cid].active, t: manualInject[cid].t || 0 };
-      varInjectOut[cid] = { active: !!varInject[cid].active, t: varInject[cid].t || 0 };
-      equipStopOut[cid] = { stopped: !!equipStop[cid].stopped };
-    });
-
     function textOf(elId){
       var el = document.getElementById(elId);
       return el ? el.textContent : "";
@@ -4640,16 +4360,16 @@
       subTick: state.subTick,
       locViolCount: state.locViolCount,
       mrViolCount: state.mrViolCount,
+      // 2026-09-29: 지금 내폭·외폭이 4분 청크(시연용)로 도는지 1시간
+      // 버킷(실제 운영)으로 도는지 - 참석자 화면의 UCL/LCL·σ 기준선이
+      // 호스트와 항상 일치하려면 이 플래그도 함께 방송해야 한다.
+      demoAggActive: outputDemoAggActive,
       lineMode: { loc: !!legendVisible.loc, ewma: !!legendVisible.ewma },
       // 7채널 전체의 "지금 각자 화면에 그려야 하는" 데이터 (2026-09-23 개편 -
       // 참석자별 자유 공정 선택을 위해 활성 채널 1개 → 전체로 확장).
       channels: channelsOut,
-      manualInject: manualInjectOut,
-      varInject: varInjectOut,
-      equipStop: equipStopOut,
-      ruleInjectStatus: textOf("ruleInjectStatus"),
-      varInjectStatus: textOf("varInjectStatus"),
-      equipStopStatus: textOf("equipStopStatus"),
+      errorDemo: { active: errorDemo.active, rule: errorDemo.rule },
+      errorDemoStatus: textOf("errorDemoStatus"),
       // 로그는 이미 40개로 캡되어 있어(pushLog) 그대로 보내도 부담이 적다.
       log: state.log,
       ts: Date.now()
@@ -4749,59 +4469,15 @@
   // 것"이 목적이라 문구/카운트다운까지 그대로 비춰야 한다), 텍스트 갱신
   // 자체는 disabled 여부와 무관하게 항상 가능하다.
   function syncInjectionUiFromBroadcast(data){
-    var mi = data.manualInject || {};
-    MANUAL_INJECT_CHANNELS.forEach(function(chId){
-      var inj = mi[chId] || { active: false, t: 0 };
-      manualInject[chId].active = inj.active;
-      manualInject[chId].t = inj.t;
-      var btn = document.querySelector('.manual-inject-btn[data-ch="' + chId + '"]');
-      if (!btn) return;
-      if (inj.active){
-        btn.classList.add("injecting");
-        btn.textContent = "⏹ 중단 (" + Math.max(0, MANUAL_INJECT_TICKS - inj.t) + "틱 남음)";
-      } else {
-        btn.classList.remove("injecting");
-        btn.textContent = MANUAL_INJECT_LABEL[chId];
-      }
-    });
-
-    var vi = data.varInject || {};
-    MANUAL_INJECT_CHANNELS.forEach(function(chId){
-      var inj = vi[chId] || { active: false, t: 0 };
-      varInject[chId].active = inj.active;
-      varInject[chId].t = inj.t;
-      var btn = document.querySelector('.var-inject-btn[data-ch="' + chId + '"]');
-      if (!btn) return;
-      if (inj.active){
-        btn.classList.add("injecting");
-        btn.textContent = "⏹ 중단 (" + Math.max(0, VAR_INJECT_TICKS - inj.t) + "틱 남음)";
-      } else {
-        btn.classList.remove("injecting");
-        btn.textContent = MANUAL_INJECT_LABEL[chId];
-      }
-    });
-    var varStatusEl = document.getElementById("varInjectStatus");
-    if (varStatusEl) varStatusEl.textContent = data.varInjectStatus || "";
-
-    var es = data.equipStop || {};
-    MANUAL_INJECT_CHANNELS.forEach(function(chId){
-      var st = es[chId] || { stopped: false };
-      equipStop[chId].stopped = st.stopped;
-      var btn = document.querySelector('.equip-stop-btn[data-ch="' + chId + '"]');
-      if (!btn) return;
-      if (st.stopped){
-        btn.classList.add("stopped");
-        btn.textContent = "▶ " + MANUAL_INJECT_LABEL[chId] + " 재가동";
-      } else {
-        btn.classList.remove("stopped");
-        btn.textContent = MANUAL_INJECT_LABEL[chId];
-      }
-    });
-    var equipStatusEl = document.getElementById("equipStopStatus");
-    if (equipStatusEl) equipStatusEl.textContent = data.equipStopStatus || "";
-
-    var ruleStatusEl = document.getElementById("ruleInjectStatus");
-    if (ruleStatusEl) ruleStatusEl.textContent = data.ruleInjectStatus || "";
+    var ed = data.errorDemo || { active: false, rule: null };
+    errorDemo.active = !!ed.active;
+    errorDemo.rule = ed.rule || null;
+    var btn = document.getElementById("errorDemoBtn");
+    if (btn){
+      btn.textContent = errorDemo.active ? "⚠️ 오류 시연 진행 중…" : "⚠️ 오류 시연";
+    }
+    var statusEl = document.getElementById("errorDemoStatus");
+    if (statusEl) statusEl.textContent = data.errorDemoStatus || "";
   }
 
   // ---------- 뷰어: 스냅샷 1건을 받아 기존 state/chState에 "그대로 반영" ----------
@@ -4829,6 +4505,10 @@
     state.locViolCount = data.locViolCount || 0;
     state.mrViolCount = data.mrViolCount || 0;
     state.log = data.log || [];
+    // 2026-09-29: 호스트가 지금 내폭·외폭을 어느 집계 기준(시연용 4분 청크 /
+    // 실제 운영 1시간 버킷)으로 돌리고 있는지 그대로 따라간다 - 이 값을
+    // 반영하지 않으면 참석자 화면의 UCL/LCL·σ가 호스트와 어긋나 보인다.
+    setOutputDemoAggActive(!!data.demoAggActive);
 
     // 표시 계열(실측값/EWMA)도 마찬가지 - 참석자가 이미 직접 골랐다면
     // (viewerLineModeHasOwnSelection === true) 발표자 선택으로 덮어쓰지 않는다.
@@ -4883,8 +4563,7 @@
     // 함께 정상 동작한다.
     [
       "#demoRunBtn", "#resetBtn",
-      ".rule-inject-btn", ".manual-inject-btn", ".var-inject-btn",
-      "#varInjectRandomBtn", ".equip-stop-btn", "#editOcapBtn"
+      "#errorDemoBtn", "#editOcapBtn"
     ].forEach(function(sel){
       document.querySelectorAll(sel).forEach(function(el){ el.disabled = true; });
     });
