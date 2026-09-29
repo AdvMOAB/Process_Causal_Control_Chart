@@ -2677,6 +2677,20 @@
   // 이 함수를 한 애니메이션 프레임 안에서 여러 번 몰아 불러 2시간(7200
   // 서브틱) 분량을 짧은 실제 시간에 "주루룩" 재생한다. 두 경로 모두 완전히
   // 같은 계산 로직을 타므로 시연 재생 결과와 평시 진행 결과가 어긋나지 않는다.
+
+  // "오류 시연" 강제 주입 중, 지금 막 pendingBatch로 잡힌 배치룰(Rule2~4)을
+  // 자연스러운 정기 보고 경계(flushReportBatch, 서브틱 3600 배수)까지
+  // 기다리지 않고 그 자리에서 즉시 reportedBatch로 승격한다 - 이 데모의
+  // 목적 자체가 "재생 도중 그 지점에서 바로 이슈가 보이는 것"이므로.
+  // conveyor(원인 후보)·chi(결과) 양쪽에서 각자의 pushRaw/accumulateChunk
+  // 직후에 호출해야, 그 채널이 이번 서브틱에 막 세팅한 pendingBatch를
+  // 놓치지 않고 승격할 수 있다.
+  function promoteErrorDemoBatch(chId){
+    if (!errorDemo.injecting || !RULE_BATCHED[errorDemo.rule]) return;
+    var pending = chState[chId].pendingBatch[errorDemo.rule];
+    if (pending) chState[chId].reportedBatch[errorDemo.rule] = pending;
+  }
+
   function advanceOneSubtick(fixedMap){
     state.subTick++;
     // tick과 subTick을 항상 같은 값으로 맞춘다 - 배속이 있던 시절엔 "실제
@@ -2698,17 +2712,20 @@
     accumulateChunk("conveyor", conv.causeVal); pushRaw("conveyor", conv.causeVal);
     // 오류 시연: Rule2~4(정기 보고 대상)는 원래 시간당 경계까지 화면 노출이
     // 미뤄지지만(visibleTrigFor는 reportedBatch만 봄), 이 데모는 버튼을
-    // 누르는 즉시 내폭의 "원인 후보 공정"이 보여야 한다. 솔트컨베이어 쪽
-    // 판정이 바로 이번 서브틱에 막 pendingBatch로 잡혔다면, 곧이어 실행될
-    // 내폭 판정(findCauseCandidates→visibleTrigFor)보다 먼저 그 자리에서
-    // reportedBatch로 승격해 "이미 보이는" 상태로 만든다 - 전역 flushReportBatch는
-    // 7채널 전부의 정기 보고 주기에 영향을 주므로 피하고, 이 채널의 이
-    // 룰 하나만 골라 승격한다.
-    if (errorDemo.injecting && RULE_BATCHED[errorDemo.rule]){
-      var convPending = chState.conveyor.pendingBatch[errorDemo.rule];
-      if (convPending) chState.conveyor.reportedBatch[errorDemo.rule] = convPending;
-    }
+    // 누르는 즉시 보여야 한다. 솔트컨베이어(원인 후보) 쪽 판정이 바로
+    // 이번 서브틱에 막 pendingBatch로 잡혔다면, 곧이어 실행될 내폭 판정
+    // (findCauseCandidates→visibleTrigFor)보다 먼저 그 자리에서
+    // reportedBatch로 승격해 "이미 보이는" 상태로 만든다.
+    promoteErrorDemoBatch("conveyor");
     accumulateChunk("chi", conv.effectVal); pushRaw("chi", conv.effectVal);
+    // 2026-09-29: 위 컨베이어 승격만으로는 부족했다 - 그건 내폭의 "원인
+    // 후보 공정" 칸(컨베이어 참조)만 즉시 채워줄 뿐, 정작 내폭 자신의
+    // 배치룰 가시성(상태 배지·경고칩)은 승격 대상이 아니어서 다음 정기
+    // 보고 경계(최대 서브틱 3600개 - 압축재생 15초 중 최악 ~7.5초)까지
+    // 계속 "정상"으로 보였다("시연 중간에 이슈가 발생했는데도 한참 뒤에야
+    // 경고가 뜨는 것 아니냐"는 사용자 리포트로 발견). 내폭 자신도 똑같이
+    // 즉시 승격한다.
+    promoteErrorDemoBatch("chi");
 
     var salt = computePairValues("salt", "oe", fixedMap);
     accumulateChunk("salt", salt.causeVal); pushRaw("salt", salt.causeVal);
@@ -3558,6 +3575,18 @@
       while (state.subTick < targetSubTick){
         var fixedMap = (typeof opts.fixedMapProvider === "function") ? opts.fixedMapProvider() : null;
         advanceOneSubtick(fixedMap);
+        // 2026-09-29: "오류 시연"의 강제 주입 서브틱(errorDemo.injecting)은
+        // 이 프레임의 나머지 수백 서브틱과 함께 묶여 아래 render() 한 번만
+        // 타면 안 된다 - Rule1/5(즉시 판정 룰)는 "지금 이 순간의 원자료
+        // 창"만 보고 판정하는데, 그 순간이 이미 몇백 서브틱 지난 뒤(자연값
+        // 구간)에야 렌더링되면 위반이 경고칩/상태 배지에 단 한 프레임도
+        // 비치지 못한 채 지나가 버린다(로그 패널의 기록 자체는 pushLog가
+        // 서브틱 단위로 정확히 남기므로 문제 없지만, 실시간 화면에는 아무
+        // 표시도 안 뜨는 것처럼 보인다 - 사용자 리포트). Rule2~4는
+        // reportedBatch 즉시 승격 훅이 이미 있어 원래도 문제가 없었지만,
+        // 이 보정을 모든 강제 주입 서브틱에 걸어도 추가 렌더 비용은
+        // 무시할 만큼 작다(최대 15회/1회의 "시연" 실행).
+        if (errorDemo.injecting) render();
       }
       render();
       updateDemoProgress();
