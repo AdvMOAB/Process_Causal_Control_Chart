@@ -1048,8 +1048,8 @@
     <div class="spacer"></div>
     <div class="mode-col">
       <div class="seg" id="modeUnitSeg" role="group" aria-label="측정 단위">
-        <button id="modeRawBtn" class="active" type="button">초단위 원자료</button>
-        <button id="modeChunkBtn" type="button">시간당 청크(평균)</button>
+        <button id="modeRawBtn" class="active" type="button">전체값</button>
+        <button id="modeChunkBtn" type="button">청크값</button>
         <button id="modeMrBtn" type="button" title="위치 차트(I)와 짝을 이루는 산포 차트 - 연속된 두 청크/버킷 평균의 차(이동범위)">산포(MR)</button>
       </div>
       <!-- "실측값/EWMA" 표시 전환(요청 2026-09-22) - 기존 범례 오른쪽
@@ -1128,7 +1128,7 @@
 
   <div class="card error-demo-card">
     <h2>⚠️ 오류 시연 <span class="matrix-tag">내폭 + 원인 후보 공정(솔트컨베이어) 동시 발생</span></h2>
-    <p>버튼을 누르면 판정 룰(Rule1~5) 중 하나가 무작위로 골라져, 내폭(chi)과 그 P-FMEA 근거 1차 원인 후보 공정인 솔트컨베이어(conveyor)에 정확히 같은 룰이 동시에 발생합니다. 내폭 OCAP 팝업의 "🔎 원인 후보 공정" 섹션에서 솔트컨베이어가 함께 표시되는 것을 확인할 수 있습니다(우연이 아니라 버튼을 누를 때마다 매번 발생). 진행 중에는 내폭·외폭도 공정센서와 같은 4분 청크 기준으로 잠시 전환되며, 완료 즉시 실제 운영 기준인 1시간 버킷으로 자동 복귀합니다.</p>
+    <p>"2시간 시연"과 같은 방식으로 2시간(7200서브틱) 분량을 약 15초에 빠르게 재생하되, 그 재생 도중 한 지점에서 판정 룰(Rule1~5) 중 하나가 무작위로 골라져 내폭(chi)과 그 P-FMEA 근거 1차 원인 후보 공정인 솔트컨베이어(conveyor)에 정확히 같은 룰이 동시에 발생합니다. 재생이 끝난 뒤 내폭 OCAP 팝업의 "🔎 원인 후보 공정" 섹션에서 솔트컨베이어가 함께 표시되는 것을 확인할 수 있습니다(우연이 아니라 버튼을 누를 때마다 매번 발생). 재생 동안에는 내폭·외폭도 공정센서와 같은 4분 청크 기준으로 전환됩니다.</p>
     <div class="error-demo-row">
       <button class="btn inject error-demo-btn" id="errorDemoBtn" type="button">⚠️ 오류 시연</button>
     </div>
@@ -1540,12 +1540,12 @@
     return naturalVal;
   }
 
-  var errorDemo = { active: false, rule: null, outputQueue: [], causeQueue: [] };
-
-  function setErrorDemoButtonDisabled(disabled){
-    var btn = document.getElementById("errorDemoBtn");
-    if (btn) btn.disabled = disabled;
-  }
+  // 2026-09-29(2차 개편): "2시간 시연"과 똑같이 2시간(7200서브틱)을 빠르게
+  // 재생하되, 그 안의 한 지점(injectStartSubTick)에서만 실제로 큐를
+  // 소비한다 - injecting이 그 "지금 주입 구간 안" 여부를 나타내는 플래그다
+  // (버튼/진행바 UI 전체를 아우르는 "이 재생이 오류 시연인가"는 rule이
+  // null이 아닌지로 판단 - 아래 startErrorDemo/completeErrorDemo 참고).
+  var errorDemo = { rule: null, outputQueue: [], causeQueue: [], injectStartSubTick: 0, injecting: false };
 
   // ---------- 정상상태 판정 억제(요청 2026-09-22, 14차) ----------
   // "정상상태만 보여주다가 주입 등으로 이슈를 발생시켰을 때 경고가 떠야
@@ -1564,12 +1564,14 @@
   // 이미 검증된 판정 로직·확률이 그대로 즉시 작동한다.
   // 2026-09-29: 4종 개별 주입 상태(ruleInject/manualInject/varInject/
   // equipStop)가 전부 errorDemo 하나로 합쳐지면서, "지금 주입 중인 채널"도
-  // errorDemo.active 여부 + 그 대상 채널(ERROR_DEMO_OUTPUT/ERROR_DEMO_CAUSE)
-  // 두 개로 줄었다. 인과관계로 엮인 결과 채널(내폭←솔트컨베이어)은 원인
-  // 채널이 주입 중이면 그 영향이 인과식을 타고 실제로 전파되어야 하므로
-  // (인과관계 시연이 이 데모의 핵심 목적) causeId 체인을 그대로 재귀 확인한다.
+  // errorDemo.injecting 여부(2시간 재생 중 실제로 큐를 소비하고 있는 그
+  // 구간만 true - 재생의 나머지 구간·평시에는 false) + 그 대상 채널
+  // (ERROR_DEMO_OUTPUT/ERROR_DEMO_CAUSE) 두 개로 줄었다. 인과관계로 엮인
+  // 결과 채널(내폭←솔트컨베이어)은 원인 채널이 주입 중이면 그 영향이
+  // 인과식을 타고 실제로 전파되어야 하므로(인과관계 시연이 이 데모의 핵심
+  // 목적) causeId 체인을 그대로 재귀 확인한다.
   function isChannelUnderInjection(chId){
-    if (errorDemo.active && (chId === ERROR_DEMO_OUTPUT || chId === ERROR_DEMO_CAUSE)) return true;
+    if (errorDemo.injecting && (chId === ERROR_DEMO_OUTPUT || chId === ERROR_DEMO_CAUSE)) return true;
     var def = CHANNEL_DEFS[chId];
     if (def && def.causeId) return isChannelUnderInjection(def.causeId);
     return false;
@@ -2689,7 +2691,7 @@
     // reportedBatch로 승격해 "이미 보이는" 상태로 만든다 - 전역 flushReportBatch는
     // 7채널 전부의 정기 보고 주기에 영향을 주므로 피하고, 이 채널의 이
     // 룰 하나만 골라 승격한다.
-    if (errorDemo.active && RULE_BATCHED[errorDemo.rule]){
+    if (errorDemo.injecting && RULE_BATCHED[errorDemo.rule]){
       var convPending = chState.conveyor.pendingBatch[errorDemo.rule];
       if (convPending) chState.conveyor.reportedBatch[errorDemo.rule] = convPending;
     }
@@ -2713,23 +2715,13 @@
     }
   }
 
+  // 2026-09-29(2차 개편): "오류 시연"이 실시간 엔진(1서브틱=실제 1초) 대신
+  // "2시간 시연"과 같은 압축 재생(runCompressedDemo, 아래 참고)으로만
+  // 동작하도록 바뀌면서, 이 평시 tick()은 더 이상 어떤 fixedMap도 만들 필요가
+  // 없다 - 오류 시연 중에는 애초에 이 setInterval 엔진 자체가 멈춰 있다
+  // (runCompressedDemo가 시작할 때 stopTimer()를 부른다).
   function tick(){
-    // 오류 시연: 이번 tick에 적용할 값을 두 채널(솔트컨베이어/내폭) 큐에서
-    // 딱 1개씩만 뽑는다 - 두 큐는 buildInjectionQueue(같은 rule)로 만들어져
-    // 항상 길이가 같으므로 매 tick 정확히 짝을 맞춰 소비된다.
-    var fixedMap = null;
-    if (errorDemo.active && errorDemo.outputQueue.length){
-      fixedMap = {};
-      fixedMap[ERROR_DEMO_CAUSE] = errorDemo.causeQueue.shift();
-      fixedMap[ERROR_DEMO_OUTPUT] = errorDemo.outputQueue.shift();
-    }
-
-    advanceOneSubtick(fixedMap);
-
-    if (errorDemo.active && errorDemo.outputQueue.length === 0 && errorDemo.causeQueue.length === 0){
-      completeErrorDemo();
-    }
-
+    advanceOneSubtick(null);
     render();
 
     // 호스트 전용: 렌더 직후 압축 스냅샷을 RTDB로 방송한다. 네트워크가
@@ -3222,7 +3214,7 @@
     document.getElementById("currentUnit").innerHTML = '<span class="unit-prefix">' + (def.unit || "") + '</span> · ' +
       "<span id=\"modeLabel\">" + modeLabelText + "</span>";
     var modeChunkBtnEl = document.getElementById("modeChunkBtn");
-    if (modeChunkBtnEl) modeChunkBtnEl.textContent = aggLabel + "(평균)";
+    if (modeChunkBtnEl) modeChunkBtnEl.textContent = "청크값";
     // 초단위(raw) = 실시간 추세선, 청크·버킷 = 정식 관리도라는 역할
     // 구분을 위해, 관리한계 관련 범례(±1σ/±2σ, UCL/LCL)는 청크·버킷
     // 모드에서만 보여준다 - drawChart()에서 실제 선을 그리는 것과 짝을 맞춘다.
@@ -3476,30 +3468,17 @@
   var demoRunning = false;
   var demoRafId = null;
 
-  // "오류 시연" 버튼은 "2시간 시연" 재생이 끝난 뒤에도(=tick() 엔진이 다시
-  // 필요할 때) 계속 쓸 수 있어야 하므로, startErrorDemo()가 필요할 때
-  // 평시 엔진(setInterval 기반 tick(), 1서브틱=실제 1초)을 스스로 깨워 쓴다.
-  function ensureTimerRunning(){
-    if (demoRunning) return; // 시연 재생 중에는 별도로 깨우지 않는다(버튼 자체가 비활성화됨).
-    // 2026-09-29: 평시(실시간) 엔진이 깨어나는 순간부터는 내폭·외폭도 다시
-    // 기준서 그대로인 1시간 버킷 기준으로 되돌린다 - 시연이 남겨둔 4분 청크
-    // 오버라이드가 실제 운영 판정에 새어 들어가지 않도록.
-    setOutputDemoAggActive(false);
-    state.running = true;
-    startTimer();
-  }
-
   function resetAllForDemo(){
     state.tick = 0;
     state.subTick = 0;
     state.locViolCount = 0;
     state.mrViolCount = 0;
     state.log = [];
-    errorDemo.active = false;
     errorDemo.rule = null;
     errorDemo.outputQueue = [];
     errorDemo.causeQueue = [];
-    setErrorDemoButtonDisabled(false);
+    errorDemo.injectStartSubTick = 0;
+    errorDemo.injecting = false;
     var errorDemoStatusResetEl = document.getElementById("errorDemoStatus");
     if (errorDemoStatusResetEl) errorDemoStatusResetEl.textContent = "";
     CHANNEL_IDS.forEach(function(id){
@@ -3508,8 +3487,9 @@
     render();
   }
 
-  // 시연 재생("2시간 시연") 중에는 "오류 시연" 버튼을 눌러 상태가 서로
-  // 꼬이는 일이 없도록 잠가둔다 - 재생이 끝나면 다시 풀린다.
+  // 시연 재생("2시간 시연"/"오류 시연" 어느 쪽이든) 중에는 "오류 시연" 버튼을
+  // 눌러 상태가 서로 꼬이는 일이 없도록 잠가둔다 - #demoRunBtn 자체는
+  // setDemoUiRunning이 직접 잠그므로, 여기서는 나머지 하나만 다룬다.
   function setDemoInteractionsDisabled(disabled){
     ["#errorDemoBtn"].forEach(function(sel){
       document.querySelectorAll(sel).forEach(function(el){ el.disabled = disabled; });
@@ -3532,13 +3512,23 @@
     if (label) label.textContent = fmtTime(state.subTick) + " / " + fmtTime(DEMO_TOTAL_SUBTICKS);
   }
 
-  function runDemo(){
+  // ---------- 2026-09-29(2차 개편): 압축 재생 엔진을 공용으로 뽑아낸다 ----------
+  // "2시간 시연"(순수 재생)과 "오류 시연"(재생 + 그 안에 강제 이슈 삽입)이
+  // 이제 완전히 같은 RAF 루프를 공유한다 - 차이는 opts로만 준다.
+  //   opts.onSetup(): resetAllForDemo/setOutputDemoAggActive 직후, 재생
+  //     시작 전에 1회 호출 - 오류 시연은 여기서 rule을 뽑고 큐를 만든다.
+  //   opts.fixedMapProvider(): 서브틱 하나마다 advanceOneSubtick에 넘길
+  //     fixedMap을 만들어 반환(없으면 매번 null - 순수 재생).
+  //   opts.onComplete(): 7200서브틱을 전부 채우고 재생이 끝난 뒤 1회 호출.
+  function runCompressedDemo(opts){
+    opts = opts || {};
     if (demoRunning) return;
-    stopTimer(); // 평시 엔진이 혹시 돌고 있었다면(오류 시연 버튼으로 깨어난 경우) 재생과 겹치지 않도록 멈춘다.
+    stopTimer(); // 평시 엔진이 혹시 돌고 있었다면 재생과 겹치지 않도록 멈춘다.
     resetAllForDemo();
-    // 2026-09-29: 시연 재생 동안만 내폭·외폭도 4분 청크 기준으로 전환 -
-    // "점이 너무 안 찍힌다"는 요청 반영(실제 운영 기준은 그대로 유지).
+    // 2026-09-29: 재생 동안만 내폭·외폭도 4분 청크 기준으로 전환 - "점이
+    // 너무 안 찍힌다"는 요청 반영(실제 운영 기준은 그대로 유지, 항목1+5).
     setOutputDemoAggActive(true);
+    if (typeof opts.onSetup === "function") opts.onSetup();
     demoRunning = true;
     setDemoUiRunning(true);
     updateDemoProgress();
@@ -3553,7 +3543,8 @@
       // 한 프레임 안에서 목표치까지 서브틱을 몰아 진행 - 실제 tick()과 완전히
       // 같은 계산 로직(advanceOneSubtick)을 타므로 결과가 평시 진행과 같다.
       while (state.subTick < targetSubTick){
-        advanceOneSubtick(null);
+        var fixedMap = (typeof opts.fixedMapProvider === "function") ? opts.fixedMapProvider() : null;
+        advanceOneSubtick(fixedMap);
       }
       render();
       updateDemoProgress();
@@ -3570,9 +3561,14 @@
         demoRunning = false;
         demoRafId = null;
         setDemoUiRunning(false);
+        if (typeof opts.onComplete === "function") opts.onComplete();
       }
     }
     demoRafId = requestAnimationFrame(step);
+  }
+
+  function runDemo(){
+    runCompressedDemo({});
   }
 
   var demoRunBtnEl = document.getElementById("demoRunBtn");
@@ -3584,25 +3580,27 @@
   var resetBtnEl = document.getElementById("resetBtn");
   if (resetBtnEl) resetBtnEl.addEventListener("click", resetAllForDemo);
 
-  // ---------- 오류 시연(2026-09-29) ----------
-  // 내폭(chi)과 그 P-FMEA 근거 1차 원인 후보 공정인 솔트컨베이어(conveyor)에
-  // 무작위(Rule1~5 중 하나) 룰을 동시에 강제 발생시킨다 - 2차
-  // AskUserQuestion 확정대로, 버튼이 눌려있는 동안만 내폭(·외폭)도 공정
-  // 센서와 같은 4분 청크 기준으로 전환해(setOutputDemoAggActive) 두 채널의
-  // 집계 주기를 맞춘다. 큐가 모두 소진되면(tick()에서 확인) completeErrorDemo가
-  // 원래 기준(1시간 버킷)으로 되돌린다.
+  // ---------- 오류 시연(2026-09-29, 2차 개편: "2시간 시연"과 같은 압축
+  // 재생 위에서 동작) ----------
+  // 요청: "오류시연은 지금 2시간 시연처럼 2시간을 빠르게 진행시켜서 거기에
+  // 오류가 발생하는 식으로 나오게 해줘" - 기존에는 버튼을 누르면 실시간
+  // 엔진(1서브틱=실제 1초)에서 즉시(길어야 15초) 판정이 일어났지만, 이제는
+  // "2시간 시연"과 완전히 같은 7200서브틱 압축 재생(약 15초) 안에서, 그
+  // 재생 도중 한 지점에 내폭(chi)·솔트컨베이어(conveyor) 동시 이슈를
+  // 끼워 넣는 방식으로 바뀐다 - runCompressedDemo를 그대로 재사용.
+  //
   // Rule5(15점 밀집 ±1σ)는 자연 노이즈도 흔히 만족하는 조건이라(정규분포상
-  // 한 점이 ±1σ 안에 들 확률이 약 68%), 주입 시작 전 두 채널에 이미 쌓여있던
-  // "자연값" 꼬리가 우연히 서로 다른 시점에 조건을 만족시키면 - 내폭이
-  // 솔트컨베이어보다 먼저(혹은 나중에) 룰을 띄워, 그 순간 반대쪽은 아직
-  // 안 띄운 상태라 원인 후보 공정이 빈 채로 로그가 남는 경우가 실측 확인됨
-  // (5회 시연 중 1회, Rule5에서만 재현). Rule1~4는 임계값이 훨씬 커
+  // 한 점이 ±1σ 안에 들 확률이 약 68%), 주입 구간 진입 전 두 채널에 이미
+  // 쌓여있던 "자연값" 꼬리가 우연히 서로 다른 시점에 조건을 만족시키면 -
+  // 내폭이 솔트컨베이어보다 먼저(혹은 나중에) 룰을 띄워, 그 순간 반대쪽은
+  // 아직 안 띄운 상태라 원인 후보 공정이 빈 채로 로그가 남는 경우가 실측
+  // 확인됨(5회 시연 중 1회, Rule5에서만 재현). Rule1~4는 임계값이 훨씬 커
   // 자연값이 우연히 만족할 확률이 사실상 0이라 이 문제가 없다. 그래서
-  // 시연 시작 시 두 채널의 raw 이력창을 비워, 주입되는 15(혹은 그 이하)개
-  // 값이 항상 "0부터 정확히 같은 속도로" 채워지게 한다 - 두 채널의 큐
-  // 길이가 항상 같으므로(같은 rule로 생성) 어떤 룰이든 마지막 큐 항목이
-  // 들어가는 서브틱에 두 채널 모두 처음으로, 그리고 반드시 동시에 조건을
-  // 만족한다.
+  // 주입 구간 진입 순간 두 채널의 raw 이력창을 비워(resetRawWindowFor),
+  // 그 이후 두 채널의 raw 이력은 오직 주입되는 값으로만·정확히 같은
+  // 속도로 채워지게 한다 - 두 채널의 큐 길이가 항상 같으므로(같은 rule로
+  // 생성) 어떤 룰이든 마지막 큐 항목이 들어가는 서브틱에 두 채널 모두
+  // 처음으로, 그리고 반드시 동시에 조건을 만족한다.
   function resetRawWindowFor(chId){
     var s = chState[chId];
     s.rawHistory = [];
@@ -3611,32 +3609,73 @@
     s.rawTrigDir = {};
   }
 
-  function startErrorDemo(){
-    if (errorDemo.active) return;
-    ensureTimerRunning(); // 시연 종료 후 정지해 있던 평시 엔진을 필요할 때 깨운다.
-    setOutputDemoAggActive(true);
-    resetRawWindowFor(ERROR_DEMO_OUTPUT);
-    resetRawWindowFor(ERROR_DEMO_CAUSE);
-
-    var rule = RULE_ORDER[Math.floor(Math.random() * RULE_ORDER.length)];
-    errorDemo.active = true;
-    errorDemo.rule = rule;
-    errorDemo.outputQueue = buildInjectionQueue(rule, CHANNEL_DEFS[ERROR_DEMO_OUTPUT]);
-    errorDemo.causeQueue = buildInjectionQueue(rule, CHANNEL_DEFS[ERROR_DEMO_CAUSE]);
-    setErrorDemoButtonDisabled(true);
-    var statusEl = document.getElementById("errorDemoStatus");
-    if (statusEl) statusEl.textContent = rule + " 오류 시연 중… (내폭 + 솔트컨베이어 동시 발생)";
+  // 7200서브틱 중 어디서 주입을 시작할지 무작위로 고른다 - 앞뒤로
+  // ERROR_DEMO_INJECT_MARGIN만큼 여유를 둬(재생 시작 직후·끝 직전은 피함)
+  // 이슈가 재생 중간 어디쯤에서 "짠" 하고 나타나는 느낌을 준다. 큐 길이가
+  // 이례적으로 길어 여유 구간이 없는 극단적인 경우엔 안전하게 정중앙에서
+  // 시작한다.
+  var ERROR_DEMO_INJECT_MARGIN = 400;
+  function pickErrorDemoInjectStart(queueLen){
+    var earliest = ERROR_DEMO_INJECT_MARGIN;
+    var latest = DEMO_TOTAL_SUBTICKS - queueLen - ERROR_DEMO_INJECT_MARGIN;
+    if (latest <= earliest) return Math.floor(DEMO_TOTAL_SUBTICKS / 2);
+    return earliest + Math.floor(Math.random() * (latest - earliest));
   }
 
-  function completeErrorDemo(){
-    errorDemo.active = false;
-    errorDemo.rule = null;
-    errorDemo.outputQueue = [];
-    errorDemo.causeQueue = [];
-    setOutputDemoAggActive(false);
-    setErrorDemoButtonDisabled(false);
-    var statusEl = document.getElementById("errorDemoStatus");
-    if (statusEl) statusEl.textContent = "오류 시연 완료 - 내폭 OCAP 팝업의 '🔎 원인 후보 공정'에서 솔트컨베이어를 확인하세요";
+  // runCompressedDemo가 서브틱마다(오류 시연 재생 중에만) 호출한다. 아직
+  // 주입 구간 전이면 null(자연값)을 돌려주고, injectStartSubTick에
+  // 도달하는 바로 그 서브틱에 raw 이력을 초기화하며 주입을 시작한다.
+  //
+  // injecting을 끄는 타이밍이 중요하다 - isChannelUnderInjection()이 이
+  // 플래그를 보고 그 서브틱의 ruleCheck 실행 여부를 정하므로, "마지막으로
+  // 강제한 값이 advanceOneSubtick에 반영되는 그 서브틱"에는 반드시
+  // injecting이 아직 true여야 한다(그래야 패턴을 완성시키는 마지막 값이
+  // 실제로 판정된다). 그래서 큐를 비우는 바로 그 호출에서 즉시 끄지 않고,
+  // "큐가 이미 빈 채로 이 함수가 다시 호출된" 다음 서브틱에서야 끈다 -
+  // 처음 구현에서 즉시 껐다가 마지막 강제값이 판정에서 누락되는 버그가
+  // Playwright 테스트로 확인되어 이렇게 한 박자 늦춘 것.
+  function errorDemoFixedMapProvider(){
+    if (errorDemo.injecting && errorDemo.outputQueue.length === 0){
+      errorDemo.injecting = false; // 직전 서브틱까지 큐를 다 썼다 - 이제 정말로 자연값 구간.
+      return null;
+    }
+    if (!errorDemo.injecting){
+      var nextSubTick = state.subTick + 1; // advanceOneSubtick이 곧 만들 서브틱 번호
+      if (errorDemo.outputQueue.length === 0 || nextSubTick < errorDemo.injectStartSubTick) return null;
+      resetRawWindowFor(ERROR_DEMO_OUTPUT);
+      resetRawWindowFor(ERROR_DEMO_CAUSE);
+      errorDemo.injecting = true;
+    }
+    var fixedMap = {};
+    fixedMap[ERROR_DEMO_CAUSE] = errorDemo.causeQueue.shift();
+    fixedMap[ERROR_DEMO_OUTPUT] = errorDemo.outputQueue.shift();
+    return fixedMap;
+  }
+
+  function startErrorDemo(){
+    if (demoRunning) return; // 이미 재생 중("2시간 시연"이든 "오류 시연"이든)이면 무시.
+    runCompressedDemo({
+      onSetup: function(){
+        var rule = RULE_ORDER[Math.floor(Math.random() * RULE_ORDER.length)];
+        errorDemo.rule = rule;
+        errorDemo.outputQueue = buildInjectionQueue(rule, CHANNEL_DEFS[ERROR_DEMO_OUTPUT]);
+        errorDemo.causeQueue = buildInjectionQueue(rule, CHANNEL_DEFS[ERROR_DEMO_CAUSE]);
+        errorDemo.injectStartSubTick = pickErrorDemoInjectStart(errorDemo.outputQueue.length);
+        errorDemo.injecting = false;
+        var statusEl = document.getElementById("errorDemoStatus");
+        if (statusEl) statusEl.textContent = rule + " 오류 시연 재생 중… (2시간 재생 중 내폭 + 솔트컨베이어에 발생)";
+      },
+      fixedMapProvider: errorDemoFixedMapProvider,
+      onComplete: function(){
+        var rule = errorDemo.rule;
+        errorDemo.rule = null;
+        errorDemo.outputQueue = [];
+        errorDemo.causeQueue = [];
+        errorDemo.injecting = false;
+        var statusEl = document.getElementById("errorDemoStatus");
+        if (statusEl) statusEl.textContent = (rule || "") + " 오류 시연 완료 - 내폭 OCAP 팝업의 '🔎 원인 후보 공정'에서 솔트컨베이어를 확인하세요";
+      }
+    });
   }
 
   var errorDemoBtnEl = document.getElementById("errorDemoBtn");
@@ -3965,10 +4004,9 @@
 
   // 2026-09-29: 위 4종 버튼 그룹(판정 룰 강제발생/공정별 수동 열화 주입/
   // 분산 확대 주입/설비 정지-재가동)의 클릭 핸들러를 "오류 시연" 단일
-  // 버튼 하나로 전부 대체했다 - 실제 로직(startErrorDemo)은 위
-  // ensureTimerRunning() 아래에 정의되어 있고, 여기서는 리스너 등록만 한다
-  // (등록 위치 자체는 runDemo/#demoRunBtn 리스너 바로 다음, startErrorDemo
-  // 선언 직후로 옮겨졌다 - 위 "오류 시연(2026-09-29)" 섹션 참고).
+  // 버튼 하나로 전부 대체했다 - 실제 로직(startErrorDemo)은 "오류 시연"
+  // 섹션(runCompressedDemo/runDemo 바로 다음)에 정의되어 있고, 여기서는
+  // 리스너 등록만 한다.
 
   window.addEventListener("resize", function(){ resizeCanvas(); drawChart(); drawReportChart(); });
 
@@ -4368,7 +4406,7 @@
       // 7채널 전체의 "지금 각자 화면에 그려야 하는" 데이터 (2026-09-23 개편 -
       // 참석자별 자유 공정 선택을 위해 활성 채널 1개 → 전체로 확장).
       channels: channelsOut,
-      errorDemo: { active: errorDemo.active, rule: errorDemo.rule },
+      errorDemo: { rule: errorDemo.rule },
       errorDemoStatus: textOf("errorDemoStatus"),
       // 로그는 이미 40개로 캡되어 있어(pushLog) 그대로 보내도 부담이 적다.
       log: state.log,
@@ -4469,12 +4507,11 @@
   // 것"이 목적이라 문구/카운트다운까지 그대로 비춰야 한다), 텍스트 갱신
   // 자체는 disabled 여부와 무관하게 항상 가능하다.
   function syncInjectionUiFromBroadcast(data){
-    var ed = data.errorDemo || { active: false, rule: null };
-    errorDemo.active = !!ed.active;
+    var ed = data.errorDemo || { rule: null };
     errorDemo.rule = ed.rule || null;
     var btn = document.getElementById("errorDemoBtn");
     if (btn){
-      btn.textContent = errorDemo.active ? "⚠️ 오류 시연 진행 중…" : "⚠️ 오류 시연";
+      btn.textContent = errorDemo.rule ? "⚠️ 오류 시연 진행 중…" : "⚠️ 오류 시연";
     }
     var statusEl = document.getElementById("errorDemoStatus");
     if (statusEl) statusEl.textContent = data.errorDemoStatus || "";
