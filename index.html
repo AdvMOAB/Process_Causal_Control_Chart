@@ -1286,9 +1286,10 @@
            등)가 달라 원값을 그대로 한 그래프에 겹치면 비교가 안 되므로,
            둘 다 각 채널 자신의 관리한계 σ로 정규화한 값을 쓴다(위 보고서
            KPI의 "평균 σ 이탈"과 같은 단위 원칙). PDF 출력 시 이 3개 그래프가
-           1페이지, 판정결과값(표 2개)이 2페이지, Rule 위반·위험요소·조치
-           표(2026-09-30 추가)가 3페이지에 나오도록 강제하는 로직은
-           triggerReportPdfDownload()의 forcedBreakEls 참고. -->
+           1페이지, 판정결과값(표 2개)이 2페이지(둘 다 A4 세로), Rule 위반·
+           위험요소·조치 표(2026-09-30 추가, 같은 날 A4 가로로 전환)가
+           3페이지부터 나오도록 강제하는 로직은 triggerReportPdfDownload()의
+           page2BreakEl/page3BreakEl 참고. -->
       <div class="report-chart-wrap">
         <div class="report-chart-head">
           <span class="report-chart-title">채널별 평균값(I) - CL 대비 평균 이탈</span>
@@ -1335,8 +1336,9 @@
            "자동 보정 또는 지시 대기"(기준서 5.6.2 그림8 조정 매트릭스 -
            위치 Rule1~4=자동보정/Rule5=지시대기, 산포(MR/S)는 Rule 무관하게
            항상 보정 보류/지시대기, 자율보정 제외 채널(chi/oe/belt)은 별도
-           표시)를 한 표로 정리한다. PDF 강제 페이지 분리는
-           triggerReportPdfDownload()의 forcedBreakEls 참고. -->
+           표시)를 한 표로 정리한다. PDF 강제 페이지 분리(3페이지부터는
+           A4 가로로 별도 재캡처)는 triggerReportPdfDownload()의
+           page3BreakEl/finishLandscape() 참고. -->
       <span class="report-chart-title report-table-title" id="reportPage3Start">Rule 위반 · 위험요소 예상 공정 · 조치 (기준서 5.6.2 그림8 근거)</span>
       <div class="report-table-wrap">
         <table class="report-table" id="reportOcapTable">
@@ -4366,25 +4368,30 @@
         bottom: tableWrap.getBoundingClientRect().bottom - modalCardTop
       };
     });
-    // 2026-09-30(요청 - 3페이지 추가): 강제 페이지 구분선을 "표 목록의
-    // 0번째"라는 위치 의존적 가정 대신, #reportPage2Start/#reportPage3Start
-    // 앵커 id로 직접 찾는다 - 표 개수·순서가 나중에 또 바뀌어도 안전하다.
-    // 측정은 restoreModal() 이전(overflow/max-height 풀린 지금)에 해야 한다.
-    var forcedBreakEls = ["#reportPage2Start", "#reportPage3Start"];
-    var forcedBreaksCss = forcedBreakEls.map(function(sel){
-      var el = modalCard.querySelector(sel);
-      return el ? (el.getBoundingClientRect().top - modalCardTop) : null;
-    }).filter(function(v){ return v !== null; });
+    // #reportPage2Start(그래프 구역 끝/판정결과값 시작) - 위치/산포 판정
+    // 결과까지(1~2페이지)는 기존처럼 A4 세로로 찍는다. #reportPage3Start
+    // (Rule 위반·위험요소·조치 로그 표)부터는 2026-09-30(요청 - "로그
+    // 나오는 3페이지만 A4 가로로 뽑아줘") 아래에서 별도로 A4 가로 캡처해
+    // 붙이므로, 여기서는 세로 파트가 끝나는 경계로만 쓴다. 측정은
+    // restoreModal() 이전(overflow/max-height 풀린 지금)에 해야 한다.
+    var page2BreakEl = modalCard.querySelector("#reportPage2Start");
+    var page3BreakEl = modalCard.querySelector("#reportPage3Start");
+    var page2BreakCss = page2BreakEl ? (page2BreakEl.getBoundingClientRect().top - modalCardTop) : null;
+    var page3BreakCssPortrait = page3BreakEl ? (page3BreakEl.getBoundingClientRect().top - modalCardTop) : null;
 
     window.html2canvas(modalCard, { backgroundColor: bgColor, scale: 2, useCORS: true })
-      .then(function(canvas){
-        restoreModal();
+      .then(function(canvasPortrait){
         return getDownloadsCapability().then(function(downloads){
           var jsPDFCtor = window.jspdf.jsPDF;
           var pageWidthMm = 210, pageHeightMm = 297, marginMm = 10;
           var usableWidthMm = pageWidthMm - marginMm * 2;
           var usableHeightMm = pageHeightMm - marginMm * 2;
-          var pxToMm = usableWidthMm / canvas.width;
+          // 2026-09-30(요청 - "로그 나오는 3페이지만 A4 가로로 뽑아줘") -
+          // A4 가로(297x210mm)의 사용 가능 폭/높이. 세로 페이지보다 폭이
+          // 약 1.46배(277/190) 넓어 표 칸 줄바꿈이 크게 줄어든다.
+          var landUsableWidthMm = pageHeightMm - marginMm * 2;  // 297-20=277
+          var landUsableHeightMm = pageWidthMm - marginMm * 2;  // 210-20=190
+          var pxToMm = usableWidthMm / canvasPortrait.width;
           var doc = new jsPDFCtor({ unit: "mm", format: "a4" });
 
           // 2026-09-30(요청 - "그래프들은 1페이지, 아래 판정결과값은
@@ -4399,23 +4406,24 @@
           // CSS px(모달 카드 기준) → canvas px 배율. html2canvas의
           // scale:2 옵션과 같은 값이어야 정상이지만, 반올림 오차 없이
           // canvas 실측 폭으로 직접 구한다.
-          var scaleFactor = canvas.width / modalCardCssWidth;
+          var scaleFactor = canvasPortrait.width / modalCardCssWidth;
           var noBreakRegionsPx = noBreakRegionsCss.map(function(r){
             return { top: r.top * scaleFactor, bottom: r.bottom * scaleFactor };
           });
-          // #reportPage2Start(그래프 구역 끝/판정결과값 시작)·
-          // #reportPage3Start(Rule 위반·위험요소·조치 표 시작) - 이 두
-          // 좌표에서 항상 페이지를 강제로 끊는다(2026-09-30, 3페이지 추가).
-          var forcedBreaksPx = forcedBreaksCss.map(function(v){ return v * scaleFactor; }).sort(function(a, b){ return a - b; });
+          // #reportPage2Start - 이 좌표에서 항상 페이지를 강제로 끊는다.
+          var forcedBreaksPx = page2BreakCss !== null ? [page2BreakCss * scaleFactor] : [];
+          // 세로 파트는 #reportPage3Start 좌표(canvasPortrait 기준)에서
+          // 멈춘다 - 그 이후(로그 표)는 아래에서 폭을 넓혀 다시 캡처한
+          // 별도 canvas로 가로 페이지에 붙인다. 앵커가 없으면(방어적)
+          // 캡처 전체를 세로로 처리.
+          var portraitEndPx = page3BreakCssPortrait !== null ? (page3BreakCssPortrait * scaleFactor) : canvasPortrait.height;
+
           var cursor = 0;
           var pageIndex = 0;
-          while (cursor < canvas.height - 0.5){
-            var proposedEnd = Math.min(cursor + sliceHeightPx, canvas.height);
-            // 강제 구분선들 중, 아직 지나지 않았고 이번 페이지가 그 지점을
-            // 넘어서 그리려 하는 것이 있다면 - 자연 페이지 높이에 여유가
-            // 남아있어도 그 지점에서 무조건 페이지를 끊는다(요청 - 그래프/
-            // 판정결과값/Rule 위반 표를 항상 별도 페이지로). 여러 개가
-            // 걸리면 가장 먼저 오는 지점부터 순서대로 끊는다.
+          while (cursor < portraitEndPx - 0.5){
+            var proposedEnd = Math.min(cursor + sliceHeightPx, portraitEndPx);
+            // 강제 구분선(그래프 구역 끝) - 자연 페이지 높이에 여유가
+            // 남아있어도 그 지점에서 무조건 페이지를 끊는다.
             for (var fb = 0; fb < forcedBreaksPx.length; fb++){
               var forcedBreakPx = forcedBreaksPx[fb];
               if (cursor < forcedBreakPx - 0.5 && proposedEnd > forcedBreakPx + 0.5){
@@ -4436,64 +4444,123 @@
                 proposedEnd = Math.min(proposedEnd, region.top);
               }
             }
-            if (pageIndex > 0) doc.addPage();
+            if (pageIndex > 0) doc.addPage("a4", "p");
             var sy = cursor;
             var sh = proposedEnd - sy;
             if (sh <= 0.5){ break; }
             var pageCanvas = document.createElement("canvas");
-            pageCanvas.width = canvas.width;
+            pageCanvas.width = canvasPortrait.width;
             pageCanvas.height = sh;
-            pageCanvas.getContext("2d").drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+            pageCanvas.getContext("2d").drawImage(canvasPortrait, 0, sy, canvasPortrait.width, sh, 0, 0, canvasPortrait.width, sh);
             doc.addImage(pageCanvas.toDataURL("image/png"), "PNG", marginMm, marginMm, usableWidthMm, sh * pxToMm);
             cursor = proposedEnd;
             pageIndex++;
           }
 
-          var periodLabel = (document.getElementById("reportModalPeriodLabel").textContent || "").trim();
-          var pdfBlob = doc.output("blob");
+          function finishAndDownload(){
+            var periodLabel = (document.getElementById("reportModalPeriodLabel").textContent || "").trim();
+            var pdfBlob = doc.output("blob");
 
-          if (downloads){
-            // A) 클로드 아티팩트 뷰어 - 뷰어의 저장 확인창을 통해 내려받는다.
-            //    플랫폼이 매개하는 방식이라 한글 파일명도 문제없이 쓸 수 있다.
-            var filename = "공정_인과_관리도_보고서_" + periodLabel + ".pdf";
-            return downloads.save({ filename: filename, data: pdfBlob }).then(function(){
-              statusEl.textContent = "PDF 저장 완료 - " + filename;
-            }, function(err){
-              if (err && err.code === "declined"){
-                statusEl.textContent = prevStatusText;
-              } else {
-                statusEl.textContent = "PDF 저장 실패(" + (err && err.code ? err.code : "오류") + ") - 인쇄 대화상자로 다시 시도해 주세요.";
-              }
-            });
-          }
-
-          if (!isClaudeArtifactViewer()){
-            // B) 일반 브라우저(깃허브 페이지 미러 등) - <a download> + Blob
-            //    URL로 바로 내려받는다. 크롬 계열 브라우저는 이 방식의
-            //    blob 다운로드에서 파일명에 한글(비-ASCII 문자)이 섞이면
-            //    저장 대화상자에 "download"로만 뜨는 문제가 있어(HTTP
-            //    응답 헤더로 내려주는 일반 다운로드와 달리 매개해 주는
-            //    서버가 없는 blob URL이라 발생) 이 경로에서만 영문 파일명을
-            //    쓴다(REPORT_PERIOD_KEY_EN 참고) - 표시 문구는 그대로 한글.
-            var asciiPeriod = currentReportPeriodKey || "report";
-            var todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-            var asciiFilename = "process_causal_control_chart_report_" + asciiPeriod + "_" + todayStr + ".pdf";
-            try {
-              downloadBlobDirectly(pdfBlob, asciiFilename);
-              statusEl.textContent = "PDF 다운로드됨(" + periodLabel + " 보고서) - " + asciiFilename;
-            } catch (e) {
-              statusEl.textContent = "PDF 다운로드 실패 - 인쇄 대화상자로 다시 시도해 주세요.";
-              triggerReportPrint();
+            if (downloads){
+              // A) 클로드 아티팩트 뷰어 - 뷰어의 저장 확인창을 통해 내려받는다.
+              //    플랫폼이 매개하는 방식이라 한글 파일명도 문제없이 쓸 수 있다.
+              var filename = "공정_인과_관리도_보고서_" + periodLabel + ".pdf";
+              return downloads.save({ filename: filename, data: pdfBlob }).then(function(){
+                statusEl.textContent = "PDF 저장 완료 - " + filename;
+              }, function(err){
+                if (err && err.code === "declined"){
+                  statusEl.textContent = prevStatusText;
+                } else {
+                  statusEl.textContent = "PDF 저장 실패(" + (err && err.code ? err.code : "오류") + ") - 인쇄 대화상자로 다시 시도해 주세요.";
+                }
+              });
             }
-            return;
+
+            if (!isClaudeArtifactViewer()){
+              // B) 일반 브라우저(깃허브 페이지 미러 등) - <a download> + Blob
+              //    URL로 바로 내려받는다. 크롬 계열 브라우저는 이 방식의
+              //    blob 다운로드에서 파일명에 한글(비-ASCII 문자)이 섞이면
+              //    저장 대화상자에 "download"로만 뜨는 문제가 있어(HTTP
+              //    응답 헤더로 내려주는 일반 다운로드와 달리 매개해 주는
+              //    서버가 없는 blob URL이라 발생) 이 경로에서만 영문 파일명을
+              //    쓴다(REPORT_PERIOD_KEY_EN 참고) - 표시 문구는 그대로 한글.
+              var asciiPeriod = currentReportPeriodKey || "report";
+              var todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+              var asciiFilename = "process_causal_control_chart_report_" + asciiPeriod + "_" + todayStr + ".pdf";
+              try {
+                downloadBlobDirectly(pdfBlob, asciiFilename);
+                statusEl.textContent = "PDF 다운로드됨(" + periodLabel + " 보고서) - " + asciiFilename;
+              } catch (e) {
+                statusEl.textContent = "PDF 다운로드 실패 - 인쇄 대화상자로 다시 시도해 주세요.";
+                triggerReportPrint();
+              }
+              return;
+            }
+
+            // 클로드 아티팩트 뷰어인데 downloads 기능을 못 쓰는 경우(권한 미승인 등)
+            statusEl.textContent = "이 화면에서는 파일 저장 기능을 쓸 수 없어 인쇄 대화상자로 대신합니다 - 대상을 'PDF로 저장'으로 선택해 주세요.";
+            triggerReportPrint();
           }
 
-          // 클로드 아티팩트 뷰어인데 downloads 기능을 못 쓰는 경우(권한 미승인 등)
-          statusEl.textContent = "이 화면에서는 파일 저장 기능을 쓸 수 없어 인쇄 대화상자로 대신합니다 - 대상을 'PDF로 저장'으로 선택해 주세요.";
-          triggerReportPrint();
+          // -------- 가로(landscape) 파트: Rule 위반·위험요소·조치 로그 표 --------
+          if (!page3BreakEl){
+            // 방어적 분기(정상 상태라면 발생하지 않음 - #reportPage3Start는
+            // 정적 HTML에 항상 존재) - 앵커가 없으면 가로 재캡처를 건너뛰고
+            // 세로 페이지만으로 마무리한다.
+            restoreModal();
+            return finishAndDownload();
+          }
+
+          // modalCard 폭을 A4 가로 사용 가능폭 비율만큼 넓혀 다시 레이아웃
+          // 시킨다 - #reportOcapTable의 6개 칸(colgroup 고정 비율)이 넓어진
+          // 폭을 그대로 나눠 가지므로 줄바꿈이 자연히 줄어든다. 세로
+          // 페이지와 같은 mm당 px 비율(줌 배율)을 유지해야 글자 크기가
+          // 페이지마다 달라 보이지 않으므로, 폭 비율은 반드시
+          // landUsableWidthMm/usableWidthMm(≈1.458)로 고정한다.
+          var prevCardWidth = modalCard.style.width;
+          var widenRatio = landUsableWidthMm / usableWidthMm;
+          modalCard.style.width = (modalCardCssWidth * widenRatio) + "px";
+          // 폭을 늘린 뒤 다시 측정 - 표 칸이 넓어지며 줄바꿈이 줄어 3페이지
+          // 시작 지점(y좌표)이 세로 버전과 달라지므로 반드시 재측정한다.
+          var wideModalCardTop = modalCard.getBoundingClientRect().top;
+          var wideModalCardCssWidth = modalCard.getBoundingClientRect().width;
+          var widePage3Top = modalCard.querySelector("#reportPage3Start").getBoundingClientRect().top - wideModalCardTop;
+
+          function finishLandscape(canvasLandscape){
+            modalCard.style.width = prevCardWidth;
+            restoreModal();
+
+            var landPxToMm = landUsableWidthMm / canvasLandscape.width;
+            var landScaleFactor = canvasLandscape.width / wideModalCardCssWidth;
+            var landSliceHeightPx = landUsableHeightMm / landPxToMm;
+            var landCursor = widePage3Top * landScaleFactor;
+            while (landCursor < canvasLandscape.height - 0.5){
+              var landEnd = Math.min(landCursor + landSliceHeightPx, canvasLandscape.height);
+              var lsh = landEnd - landCursor;
+              if (lsh <= 0.5){ break; }
+              doc.addPage("a4", "l");
+              var landPageCanvas = document.createElement("canvas");
+              landPageCanvas.width = canvasLandscape.width;
+              landPageCanvas.height = lsh;
+              landPageCanvas.getContext("2d").drawImage(canvasLandscape, 0, landCursor, canvasLandscape.width, lsh, 0, 0, canvasLandscape.width, lsh);
+              doc.addImage(landPageCanvas.toDataURL("image/png"), "PNG", marginMm, marginMm, landUsableWidthMm, lsh * landPxToMm);
+              landCursor = landEnd;
+            }
+
+            return finishAndDownload();
+          }
+
+          return window.html2canvas(modalCard, { backgroundColor: bgColor, scale: 2, useCORS: true }).then(finishLandscape, function(){
+            // 가로 재캡처 자체가 실패해도 세로 페이지(1~2페이지)까지는 이미
+            // 만들어져 있으니 그대로 저장 시도 - 폭 원복은 반드시 해야 한다.
+            modalCard.style.width = prevCardWidth;
+            restoreModal();
+            return finishAndDownload();
+          });
         });
       })
       .catch(function(){
+        modalCard.style.width = "";
         restoreModal();
         statusEl.textContent = "PDF 생성 중 오류가 발생했습니다 - 인쇄 대화상자로 다시 시도해 주세요.";
       });
