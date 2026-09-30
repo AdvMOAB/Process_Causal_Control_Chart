@@ -1160,7 +1160,7 @@
     <div class="stats-bar">
       <div class="stat"><span class="k">경과 틱</span><span class="v" id="statTicks">0</span></div>
       <div class="stat"><span class="k">위치 규칙 위반</span><span class="v" id="statViolLoc">0</span></div>
-      <div class="stat"><span class="k">산포(MR) 위반</span><span class="v" id="statViolMr">0</span></div>
+      <div class="stat"><span class="k">산포(MR/S) 위반</span><span class="v" id="statViolMr">0</span></div>
       <div class="stat"><span class="k">평균 σ 이탈</span><span class="v" id="statSigma">0.00σ</span></div>
       <div class="stat"><span class="k">시간당 Cpk</span><span class="v" id="statCpk">—</span></div>
     </div>
@@ -1172,7 +1172,7 @@
 <aside class="side-panel" id="sidePanel">
   <div class="card side-panel-card">
     <div class="side-panel-group">
-      <span class="side-panel-label" title="누르면 처음부터 다시 시작해, 2시간 분량 데이터가 전 채널에 빠르게 채워집니다. 시연 중에는 내폭·외폭도 공정센서처럼 4분 청크 기준으로 잠깐 전환되어(실제 운영은 1시간 버킷 그대로) 점이 훨씬 자주 찍히고, 산포(MR) 추세선까지 볼 수 있습니다.">시연</span>
+      <span class="side-panel-label" title="누르면 처음부터 다시 시작해, 2시간 분량 데이터가 전 채널에 빠르게 채워집니다. 시연 중에는 내폭·외폭도 공정센서처럼 4분 청크 기준으로 잠깐 전환되어(실제 운영은 1시간 버킷 그대로) 점이 훨씬 자주 찍히고, 산포(MR/S) 추세선까지 볼 수 있습니다.">시연</span>
       <button id="demoRunBtn" class="btn demo-run-btn" type="button">정상 시연</button>
       <div class="demo-progress-row" id="demoProgressRow" hidden>
         <div class="demo-progress-track"><div class="demo-progress-fill" id="demoProgressFill"></div></div>
@@ -1248,7 +1248,7 @@
       <p class="report-hint">더미 데이터로 그 기간(공정센서는 4분 청크, 내폭·외폭은 1시간 버킷 기준)만큼 즉시 시뮬레이션을 앞당겨 요약을 보여줍니다 - 위에서 진행 중인 실시간 시뮬레이션과는 별개입니다.</p>
       <div class="report-kpi-row">
         <div class="stat"><span class="k">위치 판정 건수</span><span class="v" id="reportTotalViol">—</span></div>
-        <div class="stat"><span class="k">산포(MR) 판정 건수</span><span class="v" id="reportTotalMrViol">—</span></div>
+        <div class="stat"><span class="k">산포(MR/S) 판정 건수</span><span class="v" id="reportTotalMrViol">—</span></div>
         <div class="stat"><span class="k">정상 비율(채널 평균)</span><span class="v" id="reportNormalRatio">—</span></div>
         <div class="stat"><span class="k">평균 Cpk(내폭·외폭)</span><span class="v" id="reportAvgCpk">—</span></div>
         <div class="stat"><span class="k">평균 σ 이탈(전체)</span><span class="v" id="reportAvgSigma">—</span></div>
@@ -1276,11 +1276,11 @@
       <p class="report-hint">채널별 청크/버킷 평균값이 관리중심선(CL)에서 평균적으로 얼마나(σ 단위, 부호는 방향) 벗어나 있었는지를 보여줍니다 - 채널마다 물리 단위가 달라 σ로 정규화해 한 그래프에서 비교합니다.</p>
       <div class="report-chart-wrap">
         <div class="report-chart-head">
-          <span class="report-chart-title">채널별 산포(MR) - 평균 이동범위</span>
+          <span class="report-chart-title">채널별 산포(MR/S) - 평균 변동성</span>
         </div>
         <canvas id="reportMrChart"></canvas>
       </div>
-      <p class="report-hint">연속된 두 청크/버킷 평균의 차(이동범위, MR)를 채널별로 평균 내 산포(MR) 관리한계 σ 단위로 정규화한 값입니다 - 값이 클수록 그 기간 동안 변동성이 컸다는 뜻입니다.</p>
+      <p class="report-hint">공정센서 5개는 연속된 두 청크 평균의 차(이동범위, MR), 내폭·외폭은 해당 버킷 내부 표본표준편차(S)를 채널별로 각자의 산포 관리한계 σ 단위로 정규화해 한 그래프에서 비교한 값입니다 - 값이 클수록 그 기간 동안 변동성이 컸다는 뜻입니다.</p>
       <!-- 표 헤더(요청 2026-09-22, 8차) - 위치/산포 두 표가 서로 다른
            판정 기준(전자는 Cpk=실제 공정능력, 후자는 MR=산포)을 쓰는데
            표 자체엔 그걸 구분해줄 제목이 없었다. 채널 아래 있던 chart-title
@@ -1297,16 +1297,16 @@
       <p class="report-hint">Cpk는 내폭·외폭만 설계 규격(USL/LSL) 기준의 실제 공정능력지수입니다 · 나머지 5개 채널(공정1~5 고유 변수)은 기준서상 별도 규격이 없는 공정변수라 관리한계(CL±3σ)를 대신 쓴 참고값(회색 표시)이며, 위 "평균 Cpk(내폭·외폭)"·색상 판정에는 포함되지 않습니다.</p>
       <!-- 항목4(MR 산포차트): 위치(I) 표와 분리해 별도 표로 산포(MR) 판정
            건수를 보여준다(표16 각주 - 원인 해석이 다르므로 사용자 확정). -->
-      <span class="report-chart-title report-table-title">산포(MR) 판정 결과 (산포 기준)</span>
+      <span class="report-chart-title report-table-title">산포(MR/S) 판정 결과 (산포 기준)</span>
       <div class="report-table-wrap">
         <table class="report-table" id="reportMrTable">
           <thead>
-            <tr><th>채널 · 산포(MR)</th><th>Rule1</th><th>Rule2</th><th>Rule3</th><th>Rule4</th><th>Rule5</th><th>합계</th></tr>
+            <tr><th>채널 · 산포(MR/S)</th><th>Rule1</th><th>Rule2</th><th>Rule3</th><th>Rule4</th><th>Rule5</th><th>합계</th></tr>
           </thead>
           <tbody id="reportMrTableBody"></tbody>
         </table>
       </div>
-      <p class="report-hint">산포(MR) 판정은 연속된 두 청크/버킷 평균의 차(이동범위)에 Rule1~5를 동일하게 적용한 결과입니다 - 위치(I) 차트와 다른 대상(변동성 자체)을 감시하므로 표를 분리했습니다.</p>
+      <p class="report-hint">산포(MR/S) 판정은 공정센서 5개(연속된 두 청크 평균의 차, MR)·내폭외폭(버킷 내부 표본표준편차, S)에 각각 Rule1~5를 동일하게 적용한 결과입니다 - 위치(I/Xbar) 차트와 다른 대상(변동성 자체)을 감시하므로 표를 분리했습니다.</p>
       <p class="report-status" id="reportStatus"></p>
       <div class="report-export-row">
         <div class="report-export-wrap" id="reportExportWrap">
@@ -1429,9 +1429,9 @@
   var CHANNEL_DEFS = {
     hardening:{ label:"소입로 존 온도", icon:"🔥", unit:"℃", decimals:1, role:"cause", mu:858.0, sigma:3.4, pair:"hardening" },
     conveyor: { label:"솔트컨베이어 존 온도", icon:"🌡️", unit:"℃", decimals:2, role:"cause", mu:283.8462, sigma:7.1312, pair:"chi" },
-    chi:      { label:"내폭", icon:"📏", unit:"mm", decimals:4, role:"effect", mu:25.000, beta:0.00026829, noiseSigma:0.002606, causeId:"conveyor", pair:"chi", usl:25.013, lsl:24.987 },
+    chi:      { label:"내폭", icon:"📏", unit:"mm", decimals:4, role:"effect", mu:25.000, beta:0.00026829, noiseSigma:0.002606, causeId:"conveyor", pair:"chi", usl:25.013, lsl:24.987, dispersionType:"S" },
     salt:     { label:"솔트조 온도", icon:"🌡️", unit:"℃", decimals:2, role:"cause", mu:331.8082, sigma:0.5921, pair:"oe" },
-    oe:       { label:"외폭", icon:"📐", unit:"mm", decimals:4, role:"effect", mu:30.000, beta:0.00192224, noiseSigma:0.0027097, causeId:"salt", pair:"oe", usl:30.013, lsl:29.987 },
+    oe:       { label:"외폭", icon:"📐", unit:"mm", decimals:4, role:"effect", mu:30.000, beta:0.00192224, noiseSigma:0.0027097, causeId:"salt", pair:"oe", usl:30.013, lsl:29.987, dispersionType:"S" },
     wash:     { label:"세정 온도", icon:"🧼", unit:"℃", decimals:1, role:"cause", mu:55.0, sigma:1.8, pair:"wash" },
     belt:     { label:"건조로 메시벨트속도", icon:"〰️", unit:"m/s", decimals:4, role:"cause", mu:1.197842, sigma:0.014846, pair:"belt" }
   };
@@ -1463,6 +1463,31 @@
   // 내폭/외폭 바로가기 버튼을 통해서만 진입한다.
   var OUTPUT_CHANNELS = ["chi", "oe"];
 
+  // 2026-09-30(요청 - 내폭/외폭 I-MR→Xbar-S 전환, 개발팀 요청사항): 산포
+  // 관리한계 상수(중심선 mu·표준편차 sigma)를 채널의 dispersionType에 따라
+  // 두 갈래로 계산한다 - 두 곳(실제 운영/시연용 오버라이드)에서 공통으로
+  // 쓰므로 함수로 뽑아둔다.
+  // - "MR"(공정센서 5개, 기본값): 연속된 두 구간 평균의 차(이동범위).
+  //   X1,X2~N(mu,chunkSigma²) 독립이면 MR=|X1-X2|는 반정규분포 - 이론
+  //   평균·표준편차는 2/√π(=고전 SPC d2(n=2))·√(2(1-2/π)) 그대로(기존 로직
+  //   변경 없음).
+  // - "S"(내폭·외폭): 서브그룹(n=aggSamples) 내부 표본표준편차 그 자체.
+  //   n이 매우 커서(실운영 n=3600) R(범위) 대신 S를 쓰기로 확정
+  //   (claude/MR관리도_XbarS전환_2026-09-30.md 참고) - E[S]=c4(n)·rawSigma,
+  //   sd(S)=rawSigma·√(1-c4(n)²). c4(n)은 감마함수 없이 계산 가능한 표준
+  //   근사식(AIAG 관례) c4(n)≈4(n-1)/(4n-3)을 쓴다 - n=240/3600처럼 큰
+  //   부분군에서는 c4(n)이 1에 매우 가까워(예: n=3600→0.99993) 근사 오차가
+  //   무시할 수준이다. 관리한계는 이 프로젝트 기존 관례(CL=평균, UCL/LCL=
+  //   CL±3σ)를 MR과 동일하게 적용 - 표준 B3/B4 공식(LCL을 0으로 클램프)은
+  //   쓰지 않는다(항목4 설계문서에서 MR에 이미 정한 관례를 S에도 그대로 확장).
+  function computeDispersionConstants(dispersionType, rawSigma, chunkSigma, aggSamples){
+    if (dispersionType === "S"){
+      var c4 = (4 * (aggSamples - 1)) / (4 * aggSamples - 3);
+      return { mu: rawSigma * c4, sigma: rawSigma * Math.sqrt(Math.max(0, 1 - c4 * c4)) };
+    }
+    return { mu: chunkSigma * (2 / Math.sqrt(Math.PI)), sigma: chunkSigma * Math.sqrt(2 * (1 - 2 / Math.PI)) };
+  }
+
   CHANNEL_IDS.forEach(function(id){
     var c = CHANNEL_DEFS[id];
     if (c.role === "cause") c.rawSigma = c.sigma;
@@ -1479,16 +1504,10 @@
     // 내폭·외폭에서는 "청크"가 실질적으로 "버킷(1시간)"을 의미한다.
     c.aggSamples = OUTPUT_CHANNELS.indexOf(id) !== -1 ? CHI_OE_BUCKET_SAMPLES : SENSOR_CHUNK_SAMPLES;
     c.chunkSigma = c.rawSigma / Math.sqrt(c.aggSamples);
-    // ---------- 항목4(MR 산포차트) ----------
-    // MR = 연속된 두 청크/버킷 평균의 차(이동범위). X1,X2 ~ N(mu, chunkSigma²)
-    // 독립이면 D=X2-X1 ~ N(0, 2·chunkSigma²)이고 MR=|D|는 반정규분포를
-    // 따른다 - 이론적 평균·표준편차는 아래 두 상수로 정확히 구해지며,
-    // 2/√π ≈ 1.1284는 고전 SPC의 d2(n=2) 상수와 정확히 일치한다. 관리한계는
-    // 이 프로젝트 기존 관례(CL=평균, UCL/LCL=CL±3σ)를 그대로 따른다 -
-    // 표준 D4 공식(UCL=D4×MRbar, LCL=0) 대신 이 방식을 쓰기로 사용자 확정
-    // (설계문서 claude/항목4_설계_MR산포차트_2026-09-21.md §2/§7 참고).
-    c.mrMu = c.chunkSigma * (2 / Math.sqrt(Math.PI));
-    c.mrSigma = c.chunkSigma * Math.sqrt(2 * (1 - 2 / Math.PI));
+    // ---------- 항목4(MR/S 산포차트) ----------
+    var dispConst = computeDispersionConstants(c.dispersionType || "MR", c.rawSigma, c.chunkSigma, c.aggSamples);
+    c.mrMu = dispConst.mu;
+    c.mrSigma = dispConst.sigma;
   });
 
   // ---------- 시연 전용 내폭/외폭 4분 청크 오버라이드 (2026-09-29) ----------
@@ -1513,8 +1532,9 @@
     c.realMrSigma = c.mrSigma;
     c.demoAggSamples = SENSOR_CHUNK_SAMPLES;
     c.demoChunkSigma = c.rawSigma / Math.sqrt(c.demoAggSamples);
-    c.demoMrMu = c.demoChunkSigma * (2 / Math.sqrt(Math.PI));
-    c.demoMrSigma = c.demoChunkSigma * Math.sqrt(2 * (1 - 2 / Math.PI));
+    var demoDispConst = computeDispersionConstants(c.dispersionType || "MR", c.rawSigma, c.demoChunkSigma, c.demoAggSamples);
+    c.demoMrMu = demoDispConst.mu;
+    c.demoMrSigma = demoDispConst.sigma;
   });
   // active=true → 내폭·외폭도 4분 청크 기준(시연용)으로 전환.
   // active=false → 기준서 그대로인 1시간 버킷 기준(실제 운영)으로 복원.
@@ -1886,10 +1906,28 @@
       if (s.chunkBuf.length > 15) s.chunkBuf.shift();
       s.periodCount++;
 
-      // 항목4(MR 산포차트): 연속된 두 구간 값의 실제 차분(이동범위) - 근사
-      // 없이 이번에 뽑은 chunkVal과 직전 구간 값의 차이를 그대로 쓴다.
-      if (s.prevChunkVal !== null){
-        var mrVal = Math.abs(chunkVal - s.prevChunkVal);
+      // 이 함수는 raw 개별값을 더 이상 시뮬레이션하지 않으므로, 실제
+      // aggSamples(240/3600)개를 다시 도는 대신 카이제곱 분포의 대표본
+      // 근사(Var(s²)≈2σ⁴/(n-1))로 표본표준편차의 구간별 흔들림만 가볍게
+      // 흉내낸다 - Cpk뿐 아니라(아래) dispersionType="S" 채널(내폭·외폭)의
+      // 산포(S) 계열에도 이 같은 sd를 그대로 재사용한다(2026-09-30, 개발팀
+      // 요청사항: I-MR→Xbar-S 전환. 이 sd 계산을 먼저 끌어올려 둘 다에서
+      // 쓸 수 있게 했다).
+      var n = def.aggSamples;
+      var sampleVar = def.rawSigma * def.rawSigma * Math.max(0.05, 1 + Math.sqrt(2 / (n - 1)) * rn());
+      var sd = Math.sqrt(sampleVar);
+
+      // 항목4(MR/S 산포차트): dispersionType="MR"(공정센서 5개)은 기존대로
+      // 연속된 두 구간 값의 차분(이동범위) - 직전 구간이 있어야 계산되므로
+      // 첫 구간은 건너뛴다. dispersionType="S"(내폭·외폭)는 이번 구간 자체의
+      // 표본표준편차(위 sd)라 직전 구간 없이도 첫 구간부터 바로 계산된다.
+      var mrVal = null;
+      if (def.dispersionType === "S"){
+        mrVal = sd;
+      } else if (s.prevChunkVal !== null){
+        mrVal = Math.abs(chunkVal - s.prevChunkVal);
+      }
+      if (mrVal !== null){
         s.mrBuf.push(mrVal);
         if (s.mrBuf.length > 15) s.mrBuf.shift();
         s.mrSigmaSum += mrVal / def.mrSigma;
@@ -1906,16 +1944,9 @@
       // 5개 채널은 기준서상 규격이 없는 공정변수라 관리한계(CL±3σ)를
       // 규격 대용으로 쓴 참고값이며, "평균 Cpk" 집계·색상 판정에는 합산하지
       // 않는다(hasSpec:false로 표시만 회색 처리) - 기존 원칙 그대로 유지.
-      // 이 함수는 raw 개별값을 더 이상 시뮬레이션하지 않으므로, 실제
-      // aggSamples(240/3600)개를 다시 도는 대신 카이제곱 분포의 대표본
-      // 근사(Var(s²)≈2σ⁴/(n-1))로 표본표준편차의 구간별 흔들림만 가볍게
-      // 흉내내 라이브 화면처럼 매 구간 Cpk가 살짝씩 달라지는 느낌을 낸다.
       var hasSpec = def.usl !== undefined && def.lsl !== undefined;
       var cpkUsl = hasSpec ? def.usl : def.mu + 3 * def.rawSigma;
       var cpkLsl = hasSpec ? def.lsl : def.mu - 3 * def.rawSigma;
-      var n = def.aggSamples;
-      var sampleVar = def.rawSigma * def.rawSigma * Math.max(0.05, 1 + Math.sqrt(2 / (n - 1)) * rn());
-      var sd = Math.sqrt(sampleVar);
       var cpk = sd > 0 ? Math.min((cpkUsl - def.mu) / (3 * sd), (def.mu - cpkLsl) / (3 * sd)) : null;
       if (cpk !== null){
         s.cpkSum += cpk; s.cpkCount++;
@@ -2815,16 +2846,28 @@
     s.chunkWorstColor.push(worstNow ? RULE_COLOR[worstNow].hex : null);
     if (s.chunkWorstColor.length > MAX_CHUNK) s.chunkWorstColor.shift();
 
-    // 항목4(MR 산포차트): 위치 차트(I)와 짝을 이루는 산포 차트 - 기준서
-    // 5.2(표15) "요약통계기반 계열 = I(청크평균)+MR(청크 간 변동)", 5.5절
-    // (표16 각주) "Rule1~5는 위치·산포 양쪽에 동일 적용" 근거. 첫 번째
-    // 청크/버킷(prevMean이 아직 없음)에서는 계산할 대상이 없어 건너뛴다.
-    if (prevMean !== null){
-      var mrVal = Math.abs(mean - prevMean);
+    // 항목4(MR 산포차트) + 2026-09-30(요청 - 내폭/외폭 Xbar-S 전환):
+    // 산포 지표는 채널마다 두 갈래다 - dispersionType="MR"(공정센서 5개)은
+    // 기존대로 "연속된 두 청크/버킷 평균의 차(이동범위)"라 직전 구간이 있어야
+    // 계산되고(prevMean===null인 첫 구간은 건너뜀), dispersionType="S"
+    // (내폭·외폭)는 "이번 구간 자체"의 표본표준편차라 직전 구간 없이도 첫
+    // 구간부터 바로 계산된다 - 위 sd가 이미 이번 구간 누적 sum/sumSq로부터
+    // 정확히 구해져 있으므로 그대로 재사용한다(근사가 아니라 실측값). 기준서
+    // 5.2(표15) "Xbar-S = Xbar 관리도 + S(표준편차) 관리도" 근거, 부분군
+    // 크기(n=aggSamples)가 커서(내폭·외폭 실운영 n=3600) R(범위) 대신 S를
+    // 쓰기로 확정(claude/MR관리도_XbarS전환_2026-09-30.md 참고).
+    var mrVal = null;
+    if (def.dispersionType === "S"){
+      mrVal = sd;
+    } else if (prevMean !== null){
+      mrVal = Math.abs(mean - prevMean);
+    }
+    if (mrVal !== null){
       s.mrHistory.push(mrVal);
       if (s.mrHistory.length > MAX_CHUNK) s.mrHistory.shift();
       var mrTrig = isChannelUnderInjection(id) ? ruleCheck(s.mrHistory, def.mrSigma, def.mrMu) : [];
-      var mrMode = (OUTPUT_CHANNELS.indexOf(id) !== -1 && !outputDemoAggActive) ? "버킷간 MR" : "청크간 MR";
+      var isOutputNow = OUTPUT_CHANNELS.indexOf(id) !== -1 && !outputDemoAggActive;
+      var mrMode = def.dispersionType === "S" ? (isOutputNow ? "버킷 내부 S" : "청크 내부 S") : (isOutputNow ? "버킷간 MR" : "청크간 MR");
       mrTrig.forEach(function(r){
         if (s.mrPrevTrig.indexOf(r) === -1) pushLog(id, r, mrMode, "mr", mean, mrTrig.dir[r]);
         if (RULE_BATCHED[r]) s.pendingBatch[r] = mrTrig.dir[r];
@@ -3457,7 +3500,12 @@
     // 않는다 - 실제 운영(1x)으로 돌아오면 다시 "1시간 버킷"으로 복원된다.
     var isOutputCh = OUTPUT_CHANNELS.indexOf(id) !== -1 && !outputDemoAggActive;
     var aggLabel = isOutputCh ? "1시간 버킷" : "시간당 청크";
-    var mrLabel = isOutputCh ? "버킷간 MR(산포)" : "청크간 MR(산포)";
+    // 2026-09-30(개발팀 요청사항 - 내폭/외폭 I-MR→Xbar-S 전환): 산포 차트
+    // 라벨도 채널의 dispersionType에 맞춰 "MR(간)"과 "S(내부)"를 구분해서
+    // 보여준다 - S는 "구간간 차이"가 아니라 "구간 내부 표준편차"라 문구
+    // 자체가 다르다(간 vs 내부).
+    var isSType = def.dispersionType === "S";
+    var mrLabel = isSType ? (isOutputCh ? "버킷 내부 S(산포)" : "청크 내부 S(산포)") : (isOutputCh ? "버킷간 MR(산포)" : "청크간 MR(산포)");
     var modeLabelText = state.mode === "raw" ? "초단위" : (state.mode === "mr" ? mrLabel : aggLabel);
     document.getElementById("currentUnit").innerHTML = '<span class="unit-prefix">' + (def.unit || "") + '</span> · ' +
       "<span id=\"modeLabel\">" + modeLabelText + "</span>";
@@ -3465,6 +3513,16 @@
     // 2026-09-30(요청): 버튼 표기를 "청크값"→"평균값(I)"로 변경 - 산포(MR)
     // 버튼 title의 "위치 차트(I)"라는 기존 용어와 짝을 맞춘 이름이다.
     if (modeChunkBtnEl) modeChunkBtnEl.textContent = "평균값(I)";
+    var modeMrBtnEl = document.getElementById("modeMrBtn");
+    // 2026-09-30(개발팀 요청사항): 내폭·외폭은 산포 차트가 MR이 아니라
+    // S(표준편차)이므로, 세그 버튼 표기·설명도 현재 보고 있는 채널에 맞춰
+    // 동적으로 바꾼다(다른 5개 채널을 볼 때는 기존 "산포(MR)" 그대로).
+    if (modeMrBtnEl){
+      modeMrBtnEl.textContent = isSType ? "산포(S)" : "산포(MR)";
+      modeMrBtnEl.title = isSType
+        ? "위치 차트(Xbar)와 짝을 이루는 산포 차트 - 이번 구간(버킷) 내부 표본표준편차"
+        : "위치 차트(I)와 짝을 이루는 산포 차트 - 연속된 두 청크/버킷 평균의 차(이동범위)";
+    }
     // 초단위(raw) = 실시간 추세선, 청크·버킷 = 정식 관리도라는 역할
     // 구분을 위해, 관리한계 관련 범례(±1σ/±2σ, UCL/LCL)는 청크·버킷
     // 모드에서만 보여준다 - drawChart()에서 실제 선을 그리는 것과 짝을 맞춘다.
