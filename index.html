@@ -117,8 +117,18 @@
   .side-panel-label{ font-size:10.5px; font-weight:600; color:var(--ink-muted); padding-left:2px; text-align:center; }
   /* 2026-09-29: 배속(1x/10x/60x/240x) 세그를 제거하고, 그 자리를 "시연"
      버튼 하나 + 재생 중에만 나타나는 진행 표시줄로 대체했다(요청 - 배속
-     선택 없이 시연 버튼 하나로 2시간 분량이 빠르게 채워지는 모습을 보여줌). */
-  .demo-run-btn{ width:100%; padding:8px 0; font-size:12px; }
+     선택 없이 시연 버튼 하나로 2시간 분량이 빠르게 채워지는 모습을 보여줌).
+     2026-09-30 버그 메모: 위 `.card.side-panel-card`와 완전히 같은 종류의
+     명시도 버그가 여기도 있었다 - `.demo-run-btn`(클래스 1개)로 padding/
+     font-size를 줄였다고 "고쳤"지만, 소스 순서상 나중에 나오는 공용
+     `.btn{ padding:9px 14px; font-size:13px; }`(역시 클래스 1개, 명시도
+     동일)가 그대로 이겨서 실제로는 전혀 적용되지 않고 있었다 - "정상 시연"/
+     "오류 시연" 글자가 한 줄에 안 들어가고 두 줄로 밀려 내려가던 진짜
+     원인. `.btn.demo-run-btn`/`.btn.error-demo-btn`(클래스 2개)로 명시도를
+     올려 소스 순서와 무관하게 항상 이기도록 고쳤다(캔버스 measureText로
+     실측: 13px 기준 "정상 시연" 텍스트폭 56.5px인데 당시 버튼 내부 여유폭은
+     50px뿐이라 무조건 줄바꿈되는 상황이었음). */
+  .btn.demo-run-btn, .btn.error-demo-btn{ width:100%; padding:8px 2px; font-size:11.5px; white-space:nowrap; }
   .demo-progress-row{ display:flex; flex-direction:column; gap:4px; margin-top:2px; }
   .demo-progress-track{ width:100%; height:6px; border-radius:999px; background:var(--surface-2); overflow:hidden; }
   .demo-progress-fill{ height:100%; width:0%; border-radius:999px; background:var(--accent); transition:width .12s linear; }
@@ -558,7 +568,13 @@
      숨기던 body.viewer-mode .error-demo-card 규칙도 .error-demo-group
      기준으로 그대로 옮겨(위 방백 참고) 동일하게 숨김을 유지한다. */
   .error-demo-group{ display:flex; flex-direction:column; gap:4px; margin-top:6px; }
-  .error-demo-status{ min-height:16px; font-weight:600; color:var(--ink-muted); font-size:10.5px; text-align:center; }
+  /* 2026-09-30 버그 메모: <p> 태그라 리셋 없이는 브라우저 기본 여백(1em, 즉
+     폰트 크기 10.5px 기준 위/아래 각 10.5px)이 그대로 붙는다. 상태 문구가
+     비어 있는 평소에는 이 기본 여백 + min-height가 사이드바 박스 아래에
+     쓸데없이 넓은 빈 칸으로 보이던 원인("칸 딱 맞게 줄여달라"는 요청의
+     실체) - margin:0으로 없애고 min-height도 실제 한 줄 분량(약 13px)만
+     남기도록 줄였다. */
+  .error-demo-status{ min-height:13px; margin:0; font-weight:600; color:var(--ink-muted); font-size:10.5px; text-align:center; }
 
   /* 기간별 보고서: 일간/주간/월간/연간 탭을 누르면 그 기간만큼(공정센서는
      4분 청크, 내폭·외폭은 1시간 버킷 기준) 더미 시뮬레이션을 즉시 앞당겨
