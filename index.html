@@ -608,7 +608,20 @@
      살짝 당겨 바로 아래 표에 더 가깝게 붙인다(차트 제목-차트 간격인 8px과
      맞춤). */
   .report-table-title{ margin-bottom:-4px; }
-  .report-table-wrap{ overflow-x:auto; }
+  /* 2026-09-30 버그 메모(요청 - "판정결과값도 화면에 나오게, 스크롤로 내리면
+     되잖아") - .modal-body가 display:flex column인데, 이 wrap은 overflow-x:
+     auto만 줘도 CSS 스펙상 overflow-y까지 auto로 강제 계산돼(overflow-x/y
+     중 하나만 non-visible이면 나머지도 auto로 바뀌는 규칙) 플렉스 아이템의
+     "자동 최소 높이"가 콘텐츠 크기가 아니라 0으로 처리된다. 그 결과 위에
+     쌓인 다른 카드(그래프 등)가 modal-body 박스보다 커지면 flex-shrink가
+     이 wrap을 최소 크기(=0)까지 우선적으로 눌러버려 표 자체가 화면에서
+     완전히 사라지는 버그였다(오늘 그래프 2개를 더 추가하면서 누적 높이가
+     늘어나 이 잠재 버그가 "표 아예 안 보임"으로 터짐 - 그 전에도 일부만
+     보이는 잠재 버그가 있었다). flex-shrink:0으로 이 wrap만은 축소 대상에서
+     제외해 항상 표 실제 높이(내용 그대로)를 유지하도록 고쳤다 - 넘치는
+     부분은 modal-body 자체의 overflow-y:auto(바깥 스크롤)로 그냥 스크롤해서
+     보면 된다. */
+  .report-table-wrap{ overflow-x:auto; flex-shrink:0; }
   .report-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
   .report-table th, .report-table td{ padding:8px 10px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }
   .report-table th:first-child, .report-table td:first-child{ text-align:left; }
